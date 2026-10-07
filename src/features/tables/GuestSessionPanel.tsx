@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
+import { supabase } from '../../lib/supabase';
 import { useTableContext } from './useTableContext';
 import {
     getGuestSessionState,
@@ -53,14 +54,30 @@ function SessionPanel({
     tableNumber: number;
 }) {
     const submitting = useRef(false);
+    const stateRevision = useRef(0);
+    const mounted = useRef(false);
 
     const [checking, setChecking] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    const [syncNotice, setSyncNotice] = useState('');
     const [session, setSession] = useState<GuestSession | null>(null);
     const [code, setCode] = useState<GuestConfirmationCode | null>(null);
     const [remaining, setRemaining] = useState(0);
 
+    const sessionId = session?.id;
+    const confirmed = session?.status === 'active';
+    const validCode = !!code && remaining > 0;
+
+    useEffect(() => {
+        mounted.current = true;
+
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
+
+    // Recupera a sessão existente sem gerar outro código.
     useEffect(() => {
         let disposed = false;
 
@@ -73,11 +90,12 @@ function SessionPanel({
 
                 if (disposed) return;
 
+                stateRevision.current += 1;
                 setSession(state.session);
+                setCode(state.code);
                 setRemaining(
                     state.code ? secondsUntil(state.code.expires_at) : 0,
                 );
-                setCode(state.code);
             } catch (cause) {
                 if (!disposed) {
                     setError(
@@ -100,11 +118,14 @@ function SessionPanel({
         };
     }, [restaurantSlug, tableNumber]);
 
+    // Calcula o contador pela data de vencimento do código.
     useEffect(() => {
         if (!code) return;
 
+        const expiresAt = code.expires_at;
+
         function updateClock() {
-            setRemaining(secondsUntil(code!.expires_at));
+            setRemaining(secondsUntil(expiresAt));
         }
 
         updateClock();
@@ -118,16 +139,162 @@ function SessionPanel({
         };
     }, [code]);
 
+    // Escuta alterações somente da sessão exibida.
+    useEffect(() => {
+        if (!sessionId) return;
+
+        let disposed = false;
+        let refreshing = false;
+        let refreshRequested = false;
+        let connected = false;
+        let refreshTimer: number | undefined;
+
+        function scheduleRefresh() {
+            if (disposed || refreshTimer !== undefined) return;
+
+            refreshTimer = window.setTimeout(() => {
+                refreshTimer = undefined;
+                void refreshSession();
+            }, 250);
+        }
+
+        async function refreshSession() {
+            if (disposed) return;
+
+            // Aguarda uma ação manual terminar antes de consultar.
+            if (submitting.current) {
+                scheduleRefresh();
+                return;
+            }
+
+            // Agrupa eventos recebidos durante uma consulta.
+            if (refreshing) {
+                refreshRequested = true;
+                return;
+            }
+
+            refreshing = true;
+            const revision = stateRevision.current;
+
+            try {
+                const state = await getGuestSessionState(
+                    restaurantSlug,
+                    tableNumber,
+                );
+
+                if (disposed) return;
+
+                // Descarta uma resposta anterior a uma ação mais recente.
+                if (
+                    submitting.current ||
+                    revision !== stateRevision.current
+                ) {
+                    refreshRequested = true;
+                    return;
+                }
+
+                stateRevision.current += 1;
+                setSession(state.session);
+                setCode(state.code);
+                setRemaining(
+                    state.code ? secondsUntil(state.code.expires_at) : 0,
+                );
+
+                if (connected) {
+                    setSyncNotice('');
+                }
+            } catch {
+                if (!disposed) {
+                    setSyncNotice(
+                        'Não foi possível atualizar automaticamente. Use o botão abaixo para verificar sua sessão.',
+                    );
+                }
+            } finally {
+                refreshing = false;
+
+                if (!disposed && refreshRequested) {
+                    refreshRequested = false;
+                    scheduleRefresh();
+                }
+            }
+        }
+
+        const channel = supabase
+            .channel(`guest-session:${sessionId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'guest_sessions',
+                    filter: `id=eq.${sessionId}`,
+                },
+                () => {
+                    void refreshSession();
+                },
+            )
+            .subscribe((status) => {
+                if (disposed) return;
+
+                if (status === 'SUBSCRIBED') {
+                    connected = true;
+                    setSyncNotice('');
+
+                    // Recupera mudanças ocorridas antes da conexão
+                    // ou enquanto ela estava indisponível.
+                    void refreshSession();
+                } else if (
+                    status === 'CHANNEL_ERROR' ||
+                    status === 'TIMED_OUT' ||
+                    status === 'CLOSED'
+                ) {
+                    connected = false;
+                    setSyncNotice(
+                        'A atualização automática está indisponível. Use o botão abaixo para verificar sua sessão.',
+                    );
+                }
+            });
+
+        function handleVisibility() {
+            if (!document.hidden) {
+                void refreshSession();
+            }
+        }
+
+        function handleOnline() {
+            void refreshSession();
+        }
+
+        document.addEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('online', handleOnline);
+
+        return () => {
+            disposed = true;
+
+            if (refreshTimer !== undefined) {
+                window.clearTimeout(refreshTimer);
+            }
+
+            document.removeEventListener(
+                'visibilitychange',
+                handleVisibility,
+            );
+            window.removeEventListener('online', handleOnline);
+
+            void supabase.removeChannel(channel);
+        };
+    }, [sessionId, restaurantSlug, tableNumber]);
+
     function applyState(state: GuestSessionState) {
+        if (!mounted.current) return;
+
+        stateRevision.current += 1;
         setSession(state.session);
+        setCode(state.code);
         setRemaining(
             state.code ? secondsUntil(state.code.expires_at) : 0,
         );
-        setCode(state.code);
     }
-
-    const confirmed = session?.status === 'active';
-    const validCode = !!code && remaining > 0;
 
     async function handleAction() {
         if (submitting.current || checking) return;
@@ -150,6 +317,8 @@ function SessionPanel({
                     tableNumber,
                 );
 
+                if (!mounted.current) return;
+
                 const confirmation =
                     currentSession.status === 'pending'
                         ? await issueGuestConfirmationCode(currentSession.id)
@@ -161,14 +330,19 @@ function SessionPanel({
                 });
             }
         } catch (cause) {
-            setError(
-                cause instanceof Error
-                    ? cause.message
-                    : 'Não foi possível verificar sua sessão.',
-            );
+            if (mounted.current) {
+                setError(
+                    cause instanceof Error
+                        ? cause.message
+                        : 'Não foi possível verificar sua sessão.',
+                );
+            }
         } finally {
             submitting.current = false;
-            setBusy(false);
+
+            if (mounted.current) {
+                setBusy(false);
+            }
         }
     }
 
@@ -215,7 +389,9 @@ function SessionPanel({
                                     </div>
 
                                     <div className="rounded-xl border border-black/10 bg-white px-3 py-2 text-center">
-                                        <p className="text-xs opacity-75">Expira em</p>
+                                        <p className="text-xs opacity-75">
+                                            Expira em
+                                        </p>
 
                                         <p
                                             role="timer"
@@ -236,6 +412,15 @@ function SessionPanel({
                             )
                         )}
                     </>
+                )}
+
+                {syncNotice && (
+                    <p
+                        role="status"
+                        className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900"
+                    >
+                        {syncNotice}
+                    </p>
                 )}
 
                 {error && (
