@@ -7,6 +7,7 @@ import { ExplorePage } from '../features/explore/ExplorePage';
 import { useTableContext } from '../features/tables/useTableContext';
 import { AccessPage } from '../features/auth/AccessPage';
 import { RequireStaffAccess } from '../features/auth/RequireStaffAccess';
+import { StaffServicePage } from '../features/service/StaffServicePage';
 
 function RestaurantLayout() {
   const { restaurantSlug = '' } = useParams();
@@ -70,15 +71,7 @@ export function App() {
       <Route path="explorar" element={<ExplorePage />} />
       <Route path="acesso" element={<Access />} />
       <Route element={<RequireStaffAccess />}>
-        <Route
-          path="equipe/*"
-          element={
-            <Stage
-              title="Área da equipe"
-              text="Acesso autorizado ao restaurante."
-            />
-          }
-        />
+        <Route path="equipe/*" element={<StaffServicePage />} />
       </Route>
 
       <Route element={<RequireStaffAccess requiredRole="admin" />}>
