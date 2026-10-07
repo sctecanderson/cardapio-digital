@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Product } from '../../types/menu';
 
+
 interface ExploreMediaProps {
   product: Product;
   active: boolean;

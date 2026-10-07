@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { menus } from '../../data/menu';
 import type { Product } from '../../types/menu';
 
+
 const currency = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',

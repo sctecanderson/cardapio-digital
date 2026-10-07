@@ -43,6 +43,10 @@ export const menus: Record<string, RestaurantMenu> = {
         featured: true,
         sortOrder: 1,
         coverImageId: 'noma-risoto-capa',
+        video: {
+          url: '/videos/noma/risoto.mp4',
+          mimeType: 'video/mp4',
+        },
         images: [
           {
             id: 'noma-risoto-capa',
