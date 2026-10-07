@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { menus } from '../../data/menu';
 import type { Product } from '../../types/menu';
+import { useTableContext } from '../tables/useTableContext';
 
 
 const currency = new Intl.NumberFormat('pt-BR', {
@@ -75,6 +76,12 @@ function RestaurantMenuContent({
 }: {
   restaurantSlug: string;
 }) {
+  const table = useTableContext();
+
+  const tableQuery =
+    table.status === 'unverified'
+      ? `?mesa=${table.tableNumber}`
+      : '';
   const [query, setQuery] = useState('');
   const [categoryId, setCategoryId] = useState('all');
 
@@ -195,7 +202,7 @@ function RestaurantMenuContent({
                 {currency.format(featuredProduct.priceInCents / 100)}
               </strong>
               <Link
-                to={`/${restaurantSlug}/produto/${featuredProduct.slug}`}
+                to={`/${restaurantSlug}/produto/${featuredProduct.slug}${tableQuery}`}
                 aria-label={`Ver detalhes de ${featuredProduct.name}`}
                 className="mt-3 inline-flex min-h-11 items-center font-medium text-[var(--brand)] underline underline-offset-4"
               >
@@ -258,7 +265,7 @@ function RestaurantMenuContent({
                       </span>
                     )}
                     <Link
-                      to={`/${restaurantSlug}/produto/${product.slug}`}
+                      to={`/${restaurantSlug}/produto/${product.slug}${tableQuery}`}
                       aria-label={`Ver detalhes de ${product.name}`}
                       className="mt-1 flex min-h-11 w-fit items-center text-sm font-medium text-[var(--brand)] underline underline-offset-4"
                     >

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { menus } from '../../data/menu';
 import { ExploreMedia } from './ExploreMedia';
+import { useTableContext } from '../tables/useTableContext';
 
 
 const currency = new Intl.NumberFormat('pt-BR', {
@@ -9,7 +10,7 @@ const currency = new Intl.NumberFormat('pt-BR', {
     currency: 'BRL',
 });
 
-export function ExplorePage() {
+export function ExplorePage() {   
     const { restaurantSlug = '' } = useParams();
 
     return (
@@ -25,6 +26,12 @@ function ExploreFeed({
 }: {
     restaurantSlug: string;
 }) {
+     const table = useTableContext();
+
+    const tableQuery =
+        table.status === 'unverified'
+            ? `?mesa=${table.tableNumber}`
+            : '';
     const containerRef = useRef<HTMLDivElement>(null);
     const [activeIndex, setActiveIndex] = useState(0);
 
@@ -179,7 +186,7 @@ function ExploreFeed({
                             </p>
 
                             <Link
-                                to={`/${restaurantSlug}/produto/${product.slug}`}
+                               to={`/${restaurantSlug}/produto/${product.slug}${tableQuery}`}
                                 aria-label={`Ver detalhes de ${product.name}`}
                                 className="mt-3 inline-flex min-h-11 items-center rounded-full border border-white px-5 font-medium"
                             >

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { menus } from '../../data/menu';
 import type { Product, ProductImage } from '../../types/menu';
+import { useTableContext } from '../tables/useTableContext';
 
 const currency = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -168,6 +169,12 @@ function ProductGallery({ product }: { product: Product }) {
 }
 
 export function ProductPage() {
+  const table = useTableContext();
+
+  const tableQuery =
+    table.status === 'unverified'
+      ? `?mesa=${table.tableNumber}`
+      : '';
   const {
     restaurantSlug = '',
     productSlug = '',
@@ -183,7 +190,7 @@ export function ProductPage() {
         <h1>Produto não encontrado</h1>
         <p>Este produto não está disponível neste endereço.</p>
         <Link
-          to={`/${restaurantSlug}`}
+          to={`/${restaurantSlug}${tableQuery}`}
           className="mt-4 inline-block underline"
         >
           Voltar ao cardápio
@@ -195,7 +202,7 @@ export function ProductPage() {
   return (
     <div className="space-y-6">
       <Link
-        to={`/${restaurantSlug}`}
+        to={`/${restaurantSlug}${tableQuery}`}
         className="inline-flex min-h-11 items-center underline"
       >
         ← Voltar ao cardápio

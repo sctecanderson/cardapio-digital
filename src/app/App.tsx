@@ -4,9 +4,15 @@ import { restaurants } from '../data/restaurants';
 import { MenuPage } from '../features/menu/MenuPage';
 import { ProductPage } from '../features/menu/ProductPage';
 import { ExplorePage } from '../features/explore/ExplorePage';
+import { useTableContext } from '../features/tables/useTableContext';
 
 function RestaurantLayout() {
   const { restaurantSlug = '' } = useParams();
+  const table = useTableContext();
+  const tableQuery =
+    table.status === 'unverified'
+      ? `?mesa=${table.tableNumber}`
+      : '';
   const restaurant = restaurants[restaurantSlug];
   useEffect(() => { document.title = restaurant ? `${restaurant.name} · Cardápio` : 'Restaurante não encontrado'; }, [restaurant]);
   if (!restaurant) return <NotFound />;
@@ -15,13 +21,25 @@ function RestaurantLayout() {
     <a href="#content" className="skip-link">Pular para o conteúdo</a>
     <div className="shell">
       <header className="flex items-center justify-between gap-4 py-7">
-        <Link to={`/${restaurant.slug}`} aria-label={`${restaurant.name}, início`} className="wordmark">{restaurant.name}<span>{restaurant.subtitle}</span></Link>
-        <span className="badge">Consulta sem mesa</span>
+        <Link to={`/${restaurant.slug}${tableQuery}`} aria-label={`${restaurant.name}, início`} className="wordmark">{restaurant.name}<span>{restaurant.subtitle}</span></Link>
+        <span className="badge">
+          {table.status === 'unverified'
+            ? `Mesa ${table.tableNumber} · demonstração`
+            : table.status === 'invalid'
+              ? 'Mesa inválida'
+              : 'Consulta sem mesa'}
+        </span>
       </header>
       <nav className="tabs" aria-label="Modo de visualização">
-        <NavLink end to={`/${restaurant.slug}`}>Cardápio</NavLink>
-        <NavLink to={`/${restaurant.slug}/explorar`}>Explorar</NavLink>
-      </nav>
+  <NavLink
+    end to={`/${restaurant.slug}${tableQuery}`}>
+    Cardápio
+  </NavLink>
+  <NavLink
+    to={`/${restaurant.slug}/explorar${tableQuery}`}>
+    Explorar
+  </NavLink>
+</nav>
       <main id="content" className="py-8"><Outlet /></main>
       <footer className="py-6"><p>Ambiente demonstrativo · Etapa inicial</p><Link to={`/${restaurant.slug}/acesso`}>Acesso da equipe</Link></footer>
     </div>
@@ -41,12 +59,12 @@ export function App() {
   return <Routes>
     <Route path="/" element={<Start />} />
     <Route path=":restaurantSlug" element={<RestaurantLayout />}>
-  <Route index element={<MenuPage />} />
+      <Route index element={<MenuPage />} />
 
-  <Route
-    path="produto/:productSlug"
-    element={<ProductPage />}
-  />
+      <Route
+        path="produto/:productSlug"
+        element={<ProductPage />}
+      />
       <Route path="explorar" element={<ExplorePage />} />
       <Route path="acesso" element={<Access />} />
       <Route path="equipe/*" element={<Navigate to="../acesso" replace />} />
