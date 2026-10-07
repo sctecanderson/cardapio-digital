@@ -43,3 +43,34 @@ export async function openTableVisit(
 
   return data as TableVisit;
 }
+
+export interface OpenTableVisit extends TableVisit {
+  table: {
+    table_number: number;
+  };
+}
+
+export async function listMyOpenTableVisits(
+  restaurantId: string,
+  memberId: string,
+): Promise<OpenTableVisit[]> {
+  const { data, error } = await supabase
+    .from('table_visits')
+    .select(`
+      *,
+      table:restaurant_tables!inner(table_number)
+    `)
+    .eq('restaurant_id', restaurantId)
+    .eq('assigned_member_id', memberId)
+    .eq('status', 'open')
+    .order('opened_at', { ascending: false })
+    .overrideTypes<OpenTableVisit[], { merge: false }>();
+
+  if (error) {
+    throw new Error(
+      'Não foi possível carregar seus atendimentos. Tente novamente.',
+    );
+  }
+
+  return data ?? [];
+}
