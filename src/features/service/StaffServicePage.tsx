@@ -4,6 +4,7 @@ import { useOutletContext, useParams } from 'react-router';
 import type { StaffAccess } from '../auth/staffAuth';
 import { listMyOpenTableVisits, openTableVisit } from './tableVisits';
 import type { OpenTableVisit, TableVisit } from './tableVisits';
+import { GuestConfirmationForm } from './GuestConfirmationForm';
 
 export function StaffServicePage() {
     const { restaurantSlug } = useParams();
@@ -229,6 +230,10 @@ function TableVisitForm({
                                 <p className="mt-1 text-sm opacity-75">
                                     Em atendimento por você
                                 </p>
+                                <GuestConfirmationForm
+                                    restaurantSlug={restaurantSlug}
+                                    tableNumber={visit.table.table_number}
+                                />
                             </li>
                         ))}
                     </ul>
