@@ -5,7 +5,7 @@ create function public.get_guest_session(
     p_table_number integer
 ) returns public.guest_sessions language sql stable security definer
 set
-    search_path = '' as $ $
+    search_path = '' as $$
 select
     guest.*
 from
@@ -44,7 +44,7 @@ order by
 limit
     1;
 
-$ $;
+$$;
 
 revoke all on function public.get_guest_session(text, integer)
 from

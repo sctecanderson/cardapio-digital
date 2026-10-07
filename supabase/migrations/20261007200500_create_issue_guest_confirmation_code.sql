@@ -2,11 +2,11 @@ begin;
 
 create function public.issue_guest_confirmation_code(p_guest_session_id uuid) returns public.guest_confirmation_codes language plpgsql security definer
 set
-    search_path = '' as $ $ declare current_user_id uuid;
+    search_path = '' as $$ declare current_user_id uuid;
 
-target_session public.guest_sessions % rowtype;
+target_session public.guest_sessions%rowtype;
 
-target_code public.guest_confirmation_codes % rowtype;
+target_code public.guest_confirmation_codes%rowtype;
 
 checked_restaurant_id uuid;
 
@@ -182,7 +182,7 @@ message = 'Não foi possível gerar o código. Tente novamente.';
 
 end;
 
-$ $;
+$$;
 
 revoke all on function public.issue_guest_confirmation_code(uuid)
 from

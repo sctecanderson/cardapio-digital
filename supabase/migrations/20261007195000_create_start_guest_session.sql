@@ -5,13 +5,13 @@ create function public.start_guest_session(
     p_table_number integer
 ) returns public.guest_sessions language plpgsql security definer
 set
-    search_path = '' as $ $ declare current_user_id uuid;
+    search_path = '' as $$ declare current_user_id uuid;
 
 target_restaurant_id uuid;
 
 target_table_id uuid;
 
-target_session public.guest_sessions % rowtype;
+target_session public.guest_sessions%rowtype;
 
 checked_at timestamptz;
 
@@ -129,7 +129,7 @@ return target_session;
 
 end;
 
-$ $;
+$$;
 
 revoke all on function public.start_guest_session(text, integer)
 from
