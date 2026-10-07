@@ -5,6 +5,8 @@ import { MenuPage } from '../features/menu/MenuPage';
 import { ProductPage } from '../features/menu/ProductPage';
 import { ExplorePage } from '../features/explore/ExplorePage';
 import { useTableContext } from '../features/tables/useTableContext';
+import { AccessPage } from '../features/auth/AccessPage';
+import { RequireStaffAccess } from '../features/auth/RequireStaffAccess';
 
 function RestaurantLayout() {
   const { restaurantSlug = '' } = useParams();
@@ -31,15 +33,15 @@ function RestaurantLayout() {
         </span>
       </header>
       <nav className="tabs" aria-label="Modo de visualização">
-  <NavLink
-    end to={`/${restaurant.slug}${tableQuery}`}>
-    Cardápio
-  </NavLink>
-  <NavLink
-    to={`/${restaurant.slug}/explorar${tableQuery}`}>
-    Explorar
-  </NavLink>
-</nav>
+        <NavLink
+          end to={`/${restaurant.slug}${tableQuery}`}>
+          Cardápio
+        </NavLink>
+        <NavLink
+          to={`/${restaurant.slug}/explorar${tableQuery}`}>
+          Explorar
+        </NavLink>
+      </nav>
       <main id="content" className="py-8"><Outlet /></main>
       <footer className="py-6"><p>Ambiente demonstrativo · Etapa inicial</p><Link to={`/${restaurant.slug}/acesso`}>Acesso da equipe</Link></footer>
     </div>
@@ -49,7 +51,7 @@ function Stage({ title, text }: { title: string; text: string }) {
   return <section className="panel"><span className="eyebrow">Estrutura inicial</span><h1>{title}</h1><p>{text}</p></section>;
 }
 function Access() {
-  return <Stage title="Acesso da equipe" text="A autenticação será integrada ao Supabase em uma etapa posterior. Nenhum acesso operacional está liberado nesta versão." />;
+  return <AccessPage />;
 }
 function NotFound() { return <main className="shell py-8"><h1>Página não encontrada</h1><p>Confira o endereço do restaurante.</p><Link to="/">Voltar ao início</Link></main>; }
 function Start() {
@@ -67,8 +69,29 @@ export function App() {
       />
       <Route path="explorar" element={<ExplorePage />} />
       <Route path="acesso" element={<Access />} />
-      <Route path="equipe/*" element={<Navigate to="../acesso" replace />} />
-      <Route path="admin/*" element={<Navigate to="../acesso" replace />} />
+      <Route element={<RequireStaffAccess />}>
+        <Route
+          path="equipe/*"
+          element={
+            <Stage
+              title="Área da equipe"
+              text="Acesso autorizado ao restaurante."
+            />
+          }
+        />
+      </Route>
+
+      <Route element={<RequireStaffAccess requiredRole="admin" />}>
+        <Route
+          path="admin/*"
+          element={
+            <Stage
+              title="Administração"
+              text="Acesso autorizado ao administrador."
+            />
+          }
+        />
+      </Route>
       <Route path="*" element={<NotFound />} />
     </Route>
   </Routes>;
