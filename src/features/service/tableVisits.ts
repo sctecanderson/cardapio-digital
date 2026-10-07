@@ -74,3 +74,42 @@ export async function listMyOpenTableVisits(
 
   return data ?? [];
 }
+
+export async function closeTableVisit(
+  restaurantSlug: string,
+  tableVisitId: string,
+): Promise<TableVisit> {
+  if (!tableVisitId.trim()) {
+    throw new Error('Informe o atendimento que deseja encerrar.');
+  }
+
+  const { data, error } = await supabase
+    .rpc('close_table_visit', {
+      p_restaurant_slug: restaurantSlug,
+      p_table_visit_id: tableVisitId,
+    })
+    .single()
+    .overrideTypes<TableVisit, { merge: false }>();
+
+  if (error) {
+    if (error.code === '42501' || error.code === '22023') {
+      throw new Error(error.message);
+    }
+
+    throw new Error(
+      'Não foi possível encerrar o atendimento. Tente novamente.',
+    );
+  }
+
+  if (
+    !data ||
+    data.id !== tableVisitId ||
+    data.status !== 'closed'
+  ) {
+    throw new Error(
+      'O encerramento não foi confirmado pelo servidor.',
+    );
+  }
+
+  return data;
+}

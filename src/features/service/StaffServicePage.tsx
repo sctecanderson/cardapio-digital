@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useOutletContext, useParams } from 'react-router';
 import type { StaffAccess } from '../auth/staffAuth';
-import { listMyOpenTableVisits, openTableVisit } from './tableVisits';
+import { closeTableVisit, listMyOpenTableVisits, openTableVisit, } from './tableVisits';
 import type { OpenTableVisit, TableVisit } from './tableVisits';
 import { GuestConfirmationForm } from './GuestConfirmationForm';
 
@@ -47,6 +47,12 @@ function TableVisitForm({
     const [listLoading, setListLoading] = useState(true);
     const [listError, setListError] = useState('');
     const [refresh, setRefresh] = useState(0);
+    const [closeTargetId, setCloseTargetId] = useState<string | null>(null);
+    const [closingId, setClosingId] = useState<string | null>(null);
+    const [closeError, setCloseError] = useState('');
+    const [closeNotice, setCloseNotice] = useState('');
+
+    const operationBusy = busy || closingId !== null;
 
     useEffect(() => {
         let disposed = false;
@@ -121,6 +127,44 @@ function TableVisitForm({
         }
     }
 
+    async function handleClose(visit: OpenTableVisit) {
+        if (submitting.current) return;
+
+        submitting.current = true;
+        setClosingId(visit.id);
+        setCloseError('');
+        setCloseNotice('');
+
+        try {
+            await closeTableVisit(restaurantSlug, visit.id);
+
+            setVisits((current) =>
+                current.filter((item) => item.id !== visit.id),
+            );
+
+            setResult((current) =>
+                current?.visit.id === visit.id ? null : current,
+            );
+
+            setCloseTargetId(null);
+            setCloseNotice(
+                `Atendimento da mesa ${String(
+                    visit.table.table_number,
+                ).padStart(2, '0')} encerrado. As sessões dos clientes foram revogadas.`,
+            );
+            setRefresh((current) => current + 1);
+        } catch (cause) {
+            setCloseError(
+                cause instanceof Error
+                    ? cause.message
+                    : 'Não foi possível encerrar o atendimento.',
+            );
+        } finally {
+            submitting.current = false;
+            setClosingId(null);
+        }
+    }
+
     return (
         <section className="mx-auto max-w-md rounded-3xl border border-black/10 bg-white p-6">
             <h1 className="text-2xl font-semibold">Atendimento de mesas</h1>
@@ -130,7 +174,7 @@ function TableVisitForm({
             </p>
 
             <form onSubmit={handleSubmit} className="mt-6">
-                <fieldset disabled={busy} className="space-y-4">
+                <fieldset disabled={operationBusy} className="space-y-4">
                     <div>
                         <label
                             htmlFor="service-table-number"
@@ -187,6 +231,22 @@ function TableVisitForm({
                     </p>
                 </div>
             )}
+
+            {closeNotice && (
+                <p
+                    role="status"
+                    className="mt-4 rounded-xl bg-green-50 p-4 text-sm text-green-900"
+                >
+                    {closeNotice}
+                </p>
+            )}
+
+            {closeError && (
+                <p role="alert" className="mt-4 text-sm text-red-700">
+                    {closeError}
+                </p>
+            )}
+
             <div className="mt-8 border-t border-black/10 pt-6">
                 <div className="flex items-center justify-between gap-4">
                     <h2 className="text-lg font-semibold">
@@ -196,7 +256,7 @@ function TableVisitForm({
                     <button
                         type="button"
                         onClick={() => setRefresh((current) => current + 1)}
-                        disabled={listLoading || busy}
+                        disabled={listLoading || operationBusy}
                         className="min-h-11 rounded-xl px-3 text-sm font-medium text-[var(--brand)] disabled:opacity-50"
                     >
                         Atualizar
@@ -234,6 +294,63 @@ function TableVisitForm({
                                     restaurantSlug={restaurantSlug}
                                     tableNumber={visit.table.table_number}
                                 />
+                                <div className="mt-4 border-t border-black/10 pt-4">
+                                    {closeTargetId === visit.id ? (
+                                        <div
+                                            role="group"
+                                            aria-label="Confirmar encerramento do atendimento"
+                                            className="rounded-xl bg-amber-50 p-4"
+                                        >
+                                            <p className="text-sm font-semibold text-amber-900">
+                                                Encerrar o atendimento desta mesa?
+                                            </p>
+
+                                            <p className="mt-2 text-sm text-amber-900">
+                                                As sessões dos clientes serão revogadas. Uma nova
+                                                ocupação precisará de um novo atendimento e de
+                                                confirmação pela equipe.
+                                            </p>
+
+                                            <div className="mt-4 flex flex-wrap gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleClose(visit)}
+                                                    disabled={operationBusy}
+                                                    className="min-h-11 flex-1 rounded-xl bg-red-700 px-4 text-sm font-medium text-white disabled:opacity-50"
+                                                >
+                                                    {closingId === visit.id
+                                                        ? 'Encerrando…'
+                                                        : 'Confirmar encerramento'}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setCloseTargetId(null);
+                                                        setCloseError('');
+                                                    }}
+                                                    disabled={operationBusy}
+                                                    className="min-h-11 rounded-xl border border-black/20 bg-white px-4 text-sm font-medium disabled:opacity-50"
+                                                >
+                                                    Cancelar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setCloseTargetId(visit.id);
+                                                setCloseError('');
+                                                setCloseNotice('');
+                                            }}
+                                            disabled={operationBusy}
+                                            className="min-h-11 w-full rounded-xl border border-red-700/30 px-4 text-sm font-medium text-red-700 disabled:opacity-50"
+                                        >
+                                            Encerrar atendimento
+                                        </button>
+                                    )}
+                                </div>
                             </li>
                         ))}
                     </ul>
