@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { menus } from '../../data/menu';
 import type { Product } from '../../types/menu';
 import { useTableContext } from '../tables/useTableContext';
+import { GuestSessionPanel } from '../tables/GuestSessionPanel';
 
 
 const currency = new Intl.NumberFormat('pt-BR', {
@@ -124,8 +125,10 @@ function RestaurantMenuContent({
   const showFeatured =
     featuredProduct && categoryId === 'all' && !search;
 
-  return (
+    return (
     <div className="space-y-6">
+      <GuestSessionPanel />
+
       <section aria-label="Pesquisar e filtrar produtos">
         <label htmlFor="menu-search" className="sr-only">
           Buscar prato ou bebida
