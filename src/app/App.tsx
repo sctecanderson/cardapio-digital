@@ -1,6 +1,7 @@
 import { useEffect, type CSSProperties } from 'react';
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useParams } from 'react-router';
 import { restaurants } from '../data/restaurants';
+import { PublicMenuProvider } from '../features/menu/PublicMenuProvider';
 import { MenuPage } from '../features/menu/MenuPage';
 import { ProductPage } from '../features/menu/ProductPage';
 import { ExplorePage } from '../features/explore/ExplorePage';
@@ -8,6 +9,13 @@ import { useTableContext } from '../features/tables/useTableContext';
 import { AccessPage } from '../features/auth/AccessPage';
 import { RequireStaffAccess } from '../features/auth/RequireStaffAccess';
 import { StaffServicePage } from '../features/service/StaffServicePage';
+
+function PublicMenuLayout() {
+  const { restaurantSlug = '' } = useParams();
+  return <PublicMenuProvider key={restaurantSlug} restaurantSlug={restaurantSlug}>
+    <Outlet />
+  </PublicMenuProvider>;
+}
 
 function RestaurantLayout() {
   const { restaurantSlug = '' } = useParams();
@@ -62,6 +70,7 @@ export function App() {
   return <Routes>
     <Route path="/" element={<Start />} />
     <Route path=":restaurantSlug" element={<RestaurantLayout />}>
+      <Route element={<PublicMenuLayout />}>
       <Route index element={<MenuPage />} />
 
       <Route
@@ -69,6 +78,7 @@ export function App() {
         element={<ProductPage />}
       />
       <Route path="explorar" element={<ExplorePage />} />
+      </Route>
       <Route path="acesso" element={<Access />} />
       <Route element={<RequireStaffAccess />}>
         <Route path="equipe/*" element={<StaffServicePage />} />

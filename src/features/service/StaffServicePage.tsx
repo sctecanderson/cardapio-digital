@@ -6,7 +6,9 @@ import { closeTableVisit, listMyOpenTableVisits, openTableVisit, } from './table
 import type { OpenTableVisit, TableVisit } from './tableVisits';
 import { GuestConfirmationForm } from './GuestConfirmationForm';
 import { WaiterRequestsPanel } from './WaiterRequestsPanel';
+import { BillRequestsPanel } from './BillRequestsPanel';
 import { ConfirmedGuestCount } from './ConfirmedGuestCount';
+import { TableTabsPanel } from './TableTabsPanel';
 
 export function StaffServicePage() {
     const { restaurantSlug } = useParams();
@@ -258,6 +260,15 @@ function TableVisitForm({
                 }}
             />
 
+            <BillRequestsPanel
+                restaurantSlug={restaurantSlug}
+                restaurantId={restaurantId}
+                memberId={memberId}
+                onAttended={() => {
+                    setRefresh((current) => current + 1);
+                }}
+            />
+
             <div className="mt-8 border-t border-black/10 pt-6">
                 <div className="flex items-center justify-between gap-4">
                     <h2 className="text-lg font-semibold">
@@ -304,6 +315,11 @@ function TableVisitForm({
                                 <GuestConfirmationForm
                                     restaurantSlug={restaurantSlug}
                                     tableNumber={visit.table.table_number}
+                                />
+                                <TableTabsPanel
+                                    restaurantSlug={restaurantSlug}
+                                    restaurantId={restaurantId}
+                                    tableVisitId={visit.id}
                                 />
                                 <ConfirmedGuestCount
                                     restaurantId={restaurantId}

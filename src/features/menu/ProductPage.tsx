@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { menus } from '../../data/menu';
+import { usePublicMenu, PublicMenuStatus } from './PublicMenuProvider';
 import type { Product, ProductImage } from '../../types/menu';
 import { useTableContext } from '../tables/useTableContext';
 
@@ -180,9 +180,12 @@ export function ProductPage() {
     productSlug = '',
   } = useParams();
 
-  const product = menus[restaurantSlug]?.products.find(
+  const catalog = usePublicMenu();
+  const product = catalog.menu?.products.find(
     (item) => item.slug === productSlug,
   );
+
+  if (!catalog.menu) return <PublicMenuStatus />;
 
   if (!product) {
     return (

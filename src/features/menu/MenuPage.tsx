@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { menus } from '../../data/menu';
+import { usePublicMenu, PublicMenuStatus } from './PublicMenuProvider';
 import type { Product } from '../../types/menu';
 import { useTableContext } from '../tables/useTableContext';
 import { GuestSessionPanel } from '../tables/GuestSessionPanel';
 import { WaiterCallPanel } from '../service/WaiterCallPanel';
+import { GuestTabPanel } from '../service/GuestTabPanel';
 
 
 const currency = new Intl.NumberFormat('pt-BR', {
@@ -87,15 +88,28 @@ function RestaurantMenuContent({
   const [query, setQuery] = useState('');
   const [categoryId, setCategoryId] = useState('all');
 
-  const menu = menus[restaurantSlug];
+  const catalog = usePublicMenu();
+  const menu = catalog.menu;
 
   if (!menu) {
-    return (
+    return <div className="space-y-6">
+      <WaiterCallPanel />
+      <GuestSessionPanel />
+      <GuestTabPanel />
+      <PublicMenuStatus />
+    </div>;
+  }
+
+  if (menu.products.length === 0) {
+    return <div className="space-y-6">
+      <WaiterCallPanel />
+      <GuestSessionPanel />
+      <GuestTabPanel />
       <section className="panel">
-        <h1>Cardápio indisponível</h1>
-        <p>Não encontramos o catálogo deste restaurante.</p>
+        <h1>Cardápio em preparação</h1>
+        <p>Este restaurante ainda não publicou produtos em categorias ativas.</p>
       </section>
-    );
+    </div>;
   }
 
   const categories = [...menu.categories].sort(
@@ -130,6 +144,7 @@ function RestaurantMenuContent({
     <div className="space-y-6">
       <WaiterCallPanel />
       <GuestSessionPanel />
+      <GuestTabPanel />
 
       <section aria-label="Pesquisar e filtrar produtos">
         <label htmlFor="menu-search" className="sr-only">

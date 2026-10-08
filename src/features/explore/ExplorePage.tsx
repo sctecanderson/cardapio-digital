@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { menus } from '../../data/menu';
+import { usePublicMenu, PublicMenuStatus } from '../menu/PublicMenuProvider';
 import { ExploreMedia } from './ExploreMedia';
 import { useTableContext } from '../tables/useTableContext';
 
@@ -35,7 +35,8 @@ function ExploreFeed({
     const containerRef = useRef<HTMLDivElement>(null);
     const [activeIndex, setActiveIndex] = useState(0);
 
-    const menu = menus[restaurantSlug];
+    const catalog = usePublicMenu();
+    const menu = catalog.menu;
 
     const products = [...(menu?.products ?? [])]
         .filter((product) => product.available)
@@ -47,6 +48,9 @@ function ExploreFeed({
         const container = containerRef.current;
 
         if (!container) return;
+
+        setActiveIndex(0);
+        container.scrollTop = 0;
 
         const observer = new IntersectionObserver(
             (entries) => {
@@ -93,13 +97,15 @@ function ExploreFeed({
         });
     }
 
-    if (!menu || products.length === 0) {
+    if (!menu) return <PublicMenuStatus />;
+
+    if (products.length === 0) {
         return (
             <section className="panel">
                 <h1>Nenhum produto para explorar</h1>
                 <p>Confira as opções disponíveis no cardápio.</p>
                 <Link
-                    to={`/${restaurantSlug}`}
+                    to={`/${restaurantSlug}${tableQuery}`}
                     className="mt-3 inline-flex min-h-11 items-center underline"
                 >
                     Voltar ao cardápio
