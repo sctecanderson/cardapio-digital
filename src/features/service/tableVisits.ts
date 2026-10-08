@@ -113,3 +113,24 @@ export async function closeTableVisit(
 
   return data;
 }
+
+export async function countConfirmedGuestSessions(
+    restaurantId: string,
+    tableVisitId: string,
+): Promise<number> {
+    const { count, error } = await supabase
+        .from('guest_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('restaurant_id', restaurantId)
+        .eq('table_visit_id', tableVisitId)
+        .eq('status', 'active')
+        .gt('expires_at', new Date().toISOString());
+
+    if (error || count === null) {
+        throw new Error(
+            'Não foi possível carregar os acessos confirmados.',
+        );
+    }
+
+    return count;
+}

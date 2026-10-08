@@ -4,6 +4,7 @@ import { menus } from '../../data/menu';
 import type { Product } from '../../types/menu';
 import { useTableContext } from '../tables/useTableContext';
 import { GuestSessionPanel } from '../tables/GuestSessionPanel';
+import { WaiterCallPanel } from '../service/WaiterCallPanel';
 
 
 const currency = new Intl.NumberFormat('pt-BR', {
@@ -125,8 +126,9 @@ function RestaurantMenuContent({
   const showFeatured =
     featuredProduct && categoryId === 'all' && !search;
 
-    return (
+  return (
     <div className="space-y-6">
+      <WaiterCallPanel />
       <GuestSessionPanel />
 
       <section aria-label="Pesquisar e filtrar produtos">

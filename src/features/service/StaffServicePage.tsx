@@ -5,6 +5,8 @@ import type { StaffAccess } from '../auth/staffAuth';
 import { closeTableVisit, listMyOpenTableVisits, openTableVisit, } from './tableVisits';
 import type { OpenTableVisit, TableVisit } from './tableVisits';
 import { GuestConfirmationForm } from './GuestConfirmationForm';
+import { WaiterRequestsPanel } from './WaiterRequestsPanel';
+import { ConfirmedGuestCount } from './ConfirmedGuestCount';
 
 export function StaffServicePage() {
     const { restaurantSlug } = useParams();
@@ -247,6 +249,15 @@ function TableVisitForm({
                 </p>
             )}
 
+            <WaiterRequestsPanel
+                restaurantSlug={restaurantSlug}
+                restaurantId={restaurantId}
+                memberId={memberId}
+                onAttended={() => {
+                    setRefresh((current) => current + 1);
+                }}
+            />
+
             <div className="mt-8 border-t border-black/10 pt-6">
                 <div className="flex items-center justify-between gap-4">
                     <h2 className="text-lg font-semibold">
@@ -293,6 +304,10 @@ function TableVisitForm({
                                 <GuestConfirmationForm
                                     restaurantSlug={restaurantSlug}
                                     tableNumber={visit.table.table_number}
+                                />
+                                <ConfirmedGuestCount
+                                    restaurantId={restaurantId}
+                                    tableVisitId={visit.id}
                                 />
                                 <div className="mt-4 border-t border-black/10 pt-4">
                                     {closeTargetId === visit.id ? (
