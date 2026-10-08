@@ -1,4 +1,5 @@
 node_modules/
+supabase/.temp/
 dist/
 .env
 .env.*
