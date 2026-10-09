@@ -770,6 +770,9 @@ export function PlatformRestaurantsPage() {
                   </p>
 
                   <div className="mt-4 flex flex-wrap gap-3">
+                    <Link to={`/plataforma/restaurantes/${restaurant.id}/backups`} className="admin-button">
+                      Backups
+                    </Link>
                     {!restaurant.archivedAt && (
                       <button
                         type="button"

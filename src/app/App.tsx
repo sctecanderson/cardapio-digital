@@ -69,6 +69,10 @@ const PlatformRestaurantsPage = lazy(() =>
   })),
 );
 
+const PlatformBackupsPage = lazy(() =>
+  import('../features/platform/PlatformBackupsPage').then((module) => ({ default: module.PlatformBackupsPage })),
+);
+
 function RestaurantRoot() {
   const { restaurantSlug = "" } = useParams();
   return (
@@ -230,6 +234,7 @@ export function App() {
 
         <Route element={<RequirePlatformAccess />}>
           <Route index element={<PlatformRestaurantsPage />} />
+          <Route path="restaurantes/:restaurantId/backups" element={<PlatformBackupsPage />} />
           <Route
             path="restaurantes"
             element={<PlatformRestaurantsPage />}

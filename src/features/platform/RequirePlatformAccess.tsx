@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, Outlet } from 'react-router';
 import { supabase } from '../../lib/supabase';
 import { getPlatformAccess } from './platformRestaurants';
@@ -14,6 +14,7 @@ export function RequirePlatformAccess() {
   const [state, setState] = useState<AccessState>('checking');
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
+  const allowedUser = useRef<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -23,7 +24,6 @@ export function RequirePlatformAccess() {
     async function checkAccess() {
       const request = ++revision;
 
-      setState('checking');
       setError('');
 
       try {
@@ -42,14 +42,20 @@ export function RequirePlatformAccess() {
           !data.session ||
           data.session.user.is_anonymous
         ) {
+          allowedUser.current = null;
           setState('signed-out');
           return;
         }
 
+        if (allowedUser.current !== data.session.user.id) {
+          allowedUser.current = null;
+          setState('checking');
+        }
         const allowed = await getPlatformAccess();
 
         if (disposed || request !== revision) return;
 
+        allowedUser.current = allowed ? data.session.user.id : null;
         setState(allowed ? 'allowed' : 'denied');
       } catch (cause) {
         if (disposed || request !== revision) return;
@@ -60,16 +66,15 @@ export function RequirePlatformAccess() {
             : 'Não foi possível verificar seu acesso.',
         );
 
-        setState('error');
+        if (!allowedUser.current) setState('error');
       }
     }
 
     function scheduleCheck() {
       if (disposed) return;
 
-      // Oculta o conteúdo enquanto a autorização é revalidada.
+      // Atualização em segundo plano preserva operações em andamento.
       revision += 1;
-      setState('checking');
 
       if (authTimer !== undefined) {
         clearTimeout(authTimer);
@@ -84,7 +89,11 @@ export function RequirePlatformAccess() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session || session.user.is_anonymous || session.user.id !== allowedUser.current) {
+        allowedUser.current = null;
+        setState(session ? 'checking' : 'signed-out');
+      }
       scheduleCheck();
     });
 
@@ -165,5 +174,8 @@ export function RequirePlatformAccess() {
     );
   }
 
-  return <Outlet />;
+  return <>
+    {error && <p role="status" className="shell py-3 text-sm">Não foi possível revalidar o acesso. Confira a conexão; as operações continuam verificando sua permissão no servidor.</p>}
+    <Outlet />
+  </>;
 }
