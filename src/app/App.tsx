@@ -51,6 +51,24 @@ const MediaMaintenancePage = lazy(() =>
   })),
 );
 
+const PlatformAccessPage = lazy(() =>
+  import('../features/platform/PlatformAccessPage').then((module) => ({
+    default: module.PlatformAccessPage,
+  })),
+);
+
+const RequirePlatformAccess = lazy(() =>
+  import('../features/platform/RequirePlatformAccess').then((module) => ({
+    default: module.RequirePlatformAccess,
+  })),
+);
+
+const PlatformRestaurantsPage = lazy(() =>
+  import('../features/platform/PlatformRestaurantsPage').then((module) => ({
+    default: module.PlatformRestaurantsPage,
+  })),
+);
+
 function RestaurantRoot() {
   const { restaurantSlug = "" } = useParams();
   return (
@@ -194,6 +212,32 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<Start />} />
+      <Route
+        path="plataforma"
+        element={
+          <Suspense
+            fallback={
+              <main className="shell py-10">
+                <p role="status">Carregando Elozi…</p>
+              </main>
+            }
+          >
+            <Outlet />
+          </Suspense>
+        }
+      >
+        <Route path="acesso" element={<PlatformAccessPage />} />
+
+        <Route element={<RequirePlatformAccess />}>
+          <Route index element={<PlatformRestaurantsPage />} />
+          <Route
+            path="restaurantes"
+            element={<PlatformRestaurantsPage />}
+          />
+        </Route>
+
+        <Route path="*" element={<NotFound />} />
+      </Route>
       <Route path=":restaurantSlug" element={<RestaurantRoot />}>
         <Route element={<PublicMenuLayout />}>
           <Route index element={<MenuPage />} />

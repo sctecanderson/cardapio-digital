@@ -94,7 +94,11 @@ export function RestaurantProvider({
       throw new Error(
         "Não foi possível carregar o restaurante. Confira a conexão e a migração.",
       );
-    if (!data) throw new Error("Restaurante não encontrado ou indisponível.");
+    if (!data) {
+      setRestaurant(null);
+      setError('Este restaurante está temporariamente indisponível.');
+      return;
+    }
     const next = parseRestaurant(data);
     if (next.slug !== slug) throw new Error("Restaurante incorreto.");
     setRestaurant(next);
@@ -116,7 +120,7 @@ export function RestaurantProvider({
           /* Mantém a última identidade válida no refresh de fundo. */
         });
     }
-    const timer = window.setInterval(refresh, 60_000);
+    const timer = window.setInterval(refresh, 30_000);
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("online", refresh);
     return () => {
