@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { getBillRequestState, requestBill } from './billRequests';
+import { getBillRequestState, requestBill, cancelBillRequest } from './billRequests';
 import type { BillRequest } from './billRequests';
 
 interface Props {
@@ -125,6 +125,28 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
   const retrySeconds = Math.max(0, Math.ceil((retryUntil - now) / 1000));
   const disabled = busy || loading || !!loadError || pending || tabStatus === 'closed' || retrySeconds > 0;
 
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+
+  async function handleCancelBill() {
+    if (acting.current || busy || !pending) return;
+    acting.current = true;
+    revision.current += 1;
+    setBusy(true);
+    setActionError('');
+    try {
+      await cancelBillRequest(restaurantSlug, tableTabId);
+      if (!mounted.current) return;
+      revision.current += 1;
+      setRequest(null);
+      setConfirmingCancel(false);
+    } catch (cause) {
+      if (mounted.current) setActionError(cause instanceof Error ? cause.message : 'Não foi possível cancelar o pedido de conta.');
+    } finally {
+      acting.current = false;
+      if (mounted.current) { setBusy(false); reload.current(); }
+    }
+  }
+
   async function handleConfirm() {
     if (acting.current || disabled) return;
     acting.current = true;
@@ -160,6 +182,43 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
       <p role="timer" aria-live="off" aria-label="Tempo aguardando a conta" className="mt-2 font-mono text-lg tabular-nums">
         {elapsed(request.created_at, now)}
       </p>
+
+      {confirmingCancel ? (
+        <div className="mt-3 p-3 bg-white/80 rounded-lg border border-amber-200">
+          <p className="text-xs text-amber-950 font-medium">
+            Atenção: cancelar este pedido de conta afeta todos os clientes vinculados a esta comanda. Deseja cancelar mesmo assim?
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleCancelBill()}
+              className="px-3 py-1.5 text-xs bg-red-600 text-white font-medium rounded-lg disabled:opacity-50"
+            >
+              {busy ? 'Cancelando…' : 'Sim, cancelar conta'}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setConfirmingCancel(false)}
+              className="px-3 py-1.5 text-xs bg-white border border-black/20 rounded-lg"
+            >
+              Voltar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setConfirmingCancel(true)}
+            className="text-xs text-red-700 underline font-medium hover:text-red-900"
+          >
+            Cancelar pedido de conta
+          </button>
+        </div>
+      )}
     </div>}
     {request?.status === 'attended' && tabStatus === 'open' && <p role="status" className="text-sm text-green-800">
       A equipe marcou sua solicitação como atendida.

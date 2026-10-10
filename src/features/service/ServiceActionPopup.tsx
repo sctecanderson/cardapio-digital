@@ -5,10 +5,11 @@ import { supabase } from '../../lib/supabase';
 import {
     getWaiterRequestState,
     requestWaiter,
+    cancelWaiterRequest,
 } from './serviceRequests';
 import type { WaiterRequestState } from './serviceRequests';
 import { getGuestTabState } from './guestTab';
-import { requestBill, getBillRequestState } from './billRequests';
+import { requestBill, getBillRequestState, cancelBillRequest } from './billRequests';
 import type { BillRequest } from './billRequests';
 
 export type ServiceActionType = 'waiter' | 'bill' | null;
@@ -45,13 +46,18 @@ export function ServiceActionPopup({
         request: null,
     });
     const [waiterBusy, setWaiterBusy] = useState(false);
+    const [waiterError, setWaiterError] = useState('');
+    const [waiterRateLimitSeconds, setWaiterRateLimitSeconds] = useState<number | null>(null);
     const [now, setNow] = useState(Date.now());
-    const [localCancelled, setLocalCancelled] = useState(false);
 
     // Estados para a Conta
     const [billRequest, setBillRequest] = useState<BillRequest | null>(null);
     const [tableTabId, setTableTabId] = useState<string | null>(null);
+    const [tabStatus, setTabStatus] = useState<string | null>(null);
     const [billBusy, setBillBusy] = useState(false);
+    const [billError, setBillError] = useState('');
+    const [billRateLimitSeconds, setBillRateLimitSeconds] = useState<number | null>(null);
+    const [confirmCancelBill, setConfirmCancelBill] = useState(false);
 
     // Controle do elemento <dialog> nativo
     useEffect(() => {
@@ -60,15 +66,23 @@ export function ServiceActionPopup({
 
         if (isOpen && !dialog.open) {
             dialog.showModal();
+            setWaiterError('');
+            setBillError('');
+            setConfirmCancelBill(false);
         } else if (!isOpen && dialog.open) {
             dialog.close();
         }
     }, [isOpen]);
 
-    // Timer para atualizar o tempo decorrido
+    // Timer para atualizar o tempo decorrido e rate limits
     useEffect(() => {
         if (!isOpen) return;
-        const interval = setInterval(() => setNow(Date.now()), 1000);
+        const interval = setInterval(() => {
+            const current = Date.now();
+            setNow(current);
+            setWaiterRateLimitSeconds((prev) => (prev && prev > 1 ? prev - 1 : null));
+            setBillRateLimitSeconds((prev) => (prev && prev > 1 ? prev - 1 : null));
+        }, 1000);
         return () => clearInterval(interval);
     }, [isOpen]);
 
@@ -82,9 +96,6 @@ export function ServiceActionPopup({
                 const res = await getWaiterRequestState(restaurantSlug, tableNumber);
                 if (!disposed) {
                     setWaiterState(res);
-                    if (res.request?.status === 'pending' || res.request?.status === 'attended') {
-                        setLocalCancelled(false);
-                    }
                 }
             } catch {
                 // Silencia falha se não houver chamado registrado
@@ -127,10 +138,15 @@ export function ServiceActionPopup({
 
                 if (tabState?.status === 'ready') {
                     setTableTabId(tabState.tab.id);
+                    setTabStatus(tabState.tab.status);
                     const billState = await getBillRequestState(tabState.tab.id);
                     if (!disposed) {
                         setBillRequest(billState);
                     }
+                } else {
+                    setTableTabId(null);
+                    setTabStatus(tabState?.status ?? null);
+                    setBillRequest(null);
                 }
             } catch {
                 // Silencia falhas transitórias
@@ -147,56 +163,89 @@ export function ServiceActionPopup({
 
     // Ações do Garçom
     async function handleConfirmWaiter() {
-        if (waiterBusy) return;
+        if (waiterBusy || (waiterRateLimitSeconds !== null && waiterRateLimitSeconds > 0)) return;
         setWaiterBusy(true);
+        setWaiterError('');
         try {
             const res = await requestWaiter(restaurantSlug, tableNumber);
-            if (res.status === 'created' || res.status === 'existing') {
+            if (res.status === 'rate_limited') {
+                setWaiterRateLimitSeconds(res.retryAfterSeconds);
+            } else if (res.status === 'created' || res.status === 'existing') {
                 setWaiterState({
                     guestSessionId: res.guestSessionId,
                     request: res.request,
                 });
-                setLocalCancelled(false);
             }
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Não foi possível chamar o garçom.');
+            setWaiterError(err instanceof Error ? err.message : 'Não foi possível chamar o garçom.');
         } finally {
             setWaiterBusy(false);
         }
     }
 
-    function handleCancelWaiter() {
-        setLocalCancelled(true);
-        setWaiterState((prev) => ({
-            ...prev,
-            request: null,
-        }));
+    async function handleCancelWaiter() {
+        if (waiterBusy) return;
+        setWaiterBusy(true);
+        setWaiterError('');
+        try {
+            await cancelWaiterRequest(restaurantSlug, tableNumber);
+            setWaiterState({
+                guestSessionId: null,
+                request: null,
+            });
+        } catch (err) {
+            setWaiterError(err instanceof Error ? err.message : 'Não foi possível cancelar o chamado.');
+        } finally {
+            setWaiterBusy(false);
+        }
     }
 
     // Ações da Conta
     async function handleConfirmBill() {
-        if (billBusy) return;
+        if (billBusy || (billRateLimitSeconds !== null && billRateLimitSeconds > 0)) return;
         setBillBusy(true);
+        setBillError('');
+
+        if (!tableTabId) {
+            setBillBusy(false);
+            setBillError(
+                'Sua comanda ainda não está vinculada a esta mesa. Acesse a aba Comanda ou solicite a abertura de comanda com nossa equipe.',
+            );
+            return;
+        }
+
         try {
-            if (tableTabId) {
-                const res = await requestBill(restaurantSlug, tableTabId);
-                if (res.status === 'created' || res.status === 'existing') {
-                    setBillRequest(res.request);
-                }
-            } else {
-                // Se a mesa ainda não tem comanda associada, usa requestWaiter com fallback
-                await requestWaiter(restaurantSlug, tableNumber);
+            const res = await requestBill(restaurantSlug, tableTabId);
+            if (res.status === 'rate_limited') {
+                setBillRateLimitSeconds(res.retryAfterSeconds);
+            } else if (res.status === 'created' || res.status === 'existing') {
+                setBillRequest(res.request);
             }
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'Não foi possível solicitar a conta.');
+            setBillError(err instanceof Error ? err.message : 'Não foi possível solicitar a conta.');
+        } finally {
+            setBillBusy(false);
+        }
+    }
+
+    async function handleCancelBill() {
+        if (billBusy || !tableTabId) return;
+        setBillBusy(true);
+        setBillError('');
+        try {
+            await cancelBillRequest(restaurantSlug, tableTabId);
+            setBillRequest(null);
+            setConfirmCancelBill(false);
+        } catch (err) {
+            setBillError(err instanceof Error ? err.message : 'Não foi possível cancelar o pedido de conta.');
         } finally {
             setBillBusy(false);
         }
     }
 
     const waiterRequest = waiterState.request;
-    const isWaiterPending = !localCancelled && waiterRequest?.status === 'pending';
-    const isWaiterAttended = !localCancelled && waiterRequest?.status === 'attended';
+    const isWaiterPending = waiterRequest?.status === 'pending';
+    const isWaiterAttended = waiterRequest?.status === 'attended';
 
     const waiterElapsedSeconds = isWaiterPending && waiterRequest
         ? Math.max(0, Math.floor((now - Date.parse(waiterRequest.created_at)) / 1000))
@@ -310,6 +359,12 @@ export function ServiceActionPopup({
                             <span aria-hidden="true">🕒</span>
                         </div>
 
+                        {waiterError && (
+                            <p role="alert" className="text-xs text-red-600 mt-2 px-2 text-center">
+                                {waiterError}
+                            </p>
+                        )}
+
                         <div className="service-popup-actions single">
                             <button
                                 type="button"
@@ -322,9 +377,10 @@ export function ServiceActionPopup({
                             <button
                                 type="button"
                                 className="service-popup-link-btn"
-                                onClick={handleCancelWaiter}
+                                disabled={waiterBusy}
+                                onClick={() => void handleCancelWaiter()}
                             >
-                                Cancelar chamado
+                                {waiterBusy ? 'Cancelando…' : 'Cancelar chamado'}
                             </button>
                         </div>
                     </div>
@@ -352,6 +408,18 @@ export function ServiceActionPopup({
                             Sua solicitação será enviada à equipe para atender a {tableLabel}.
                         </p>
 
+                        {waiterRateLimitSeconds !== null && waiterRateLimitSeconds > 0 && (
+                            <p role="status" className="text-xs text-amber-700 bg-amber-50 p-2 rounded-lg text-center">
+                                Limite atingido. Aguarde {waiterRateLimitSeconds}s para chamar novamente.
+                            </p>
+                        )}
+
+                        {waiterError && (
+                            <p role="alert" className="text-xs text-red-600 px-2 text-center">
+                                {waiterError}
+                            </p>
+                        )}
+
                         <div className="service-popup-actions dual">
                             <button
                                 type="button"
@@ -364,7 +432,7 @@ export function ServiceActionPopup({
                             <button
                                 type="button"
                                 className="service-popup-btn solid"
-                                disabled={waiterBusy}
+                                disabled={waiterBusy || (waiterRateLimitSeconds !== null && waiterRateLimitSeconds > 0)}
                                 onClick={() => void handleConfirmWaiter()}
                             >
                                 {waiterBusy ? 'Enviando…' : 'Confirmar'}
@@ -406,15 +474,55 @@ export function ServiceActionPopup({
                                     Tempo decorrido: {formatElapsed(billElapsedSeconds)}{' '}
                                     <span aria-hidden="true">🕒</span>
                                 </div>
-                                <div className="service-popup-actions single">
-                                    <button
-                                        type="button"
-                                        className="service-popup-btn solid"
-                                        onClick={onClose}
-                                    >
-                                        Continuar no cardápio
-                                    </button>
-                                </div>
+
+                                {billError && (
+                                    <p role="alert" className="text-xs text-red-600 mt-2 px-2 text-center">
+                                        {billError}
+                                    </p>
+                                )}
+
+                                {confirmCancelBill ? (
+                                    <div className="mt-3 p-3 bg-amber-50 rounded-xl text-center">
+                                        <p className="text-xs text-amber-900 font-medium">
+                                            Atenção: cancelar este pedido afeta todos os clientes vinculados a esta comanda. Deseja cancelar mesmo assim?
+                                        </p>
+                                        <div className="mt-2 flex gap-2 justify-center">
+                                            <button
+                                                type="button"
+                                                className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg font-medium"
+                                                disabled={billBusy}
+                                                onClick={() => void handleCancelBill()}
+                                            >
+                                                {billBusy ? 'Cancelando…' : 'Sim, cancelar'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="px-3 py-1.5 text-xs bg-white border border-black/10 rounded-lg"
+                                                disabled={billBusy}
+                                                onClick={() => setConfirmCancelBill(false)}
+                                            >
+                                                Voltar
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="service-popup-actions single">
+                                        <button
+                                            type="button"
+                                            className="service-popup-btn solid"
+                                            onClick={onClose}
+                                        >
+                                            Continuar no cardápio
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="service-popup-link-btn"
+                                            onClick={() => setConfirmCancelBill(true)}
+                                        >
+                                            Cancelar pedido de conta
+                                        </button>
+                                    </div>
+                                )}
                             </>
                         ) : (
                             <>
@@ -424,6 +532,19 @@ export function ServiceActionPopup({
                                 <p className="service-popup-desc">
                                     A equipe receberá sua solicitação para fechar e levar a conta da {tableLabel}.
                                 </p>
+
+                                {billRateLimitSeconds !== null && billRateLimitSeconds > 0 && (
+                                    <p role="status" className="text-xs text-amber-700 bg-amber-50 p-2 rounded-lg text-center">
+                                        Limite atingido. Aguarde {billRateLimitSeconds}s para solicitar novamente.
+                                    </p>
+                                )}
+
+                                {billError && (
+                                    <p role="alert" className="text-xs text-red-600 px-2 text-center">
+                                        {billError}
+                                    </p>
+                                )}
+
                                 <div className="service-popup-actions dual">
                                     <button
                                         type="button"
@@ -435,7 +556,7 @@ export function ServiceActionPopup({
                                     <button
                                         type="button"
                                         className="service-popup-btn solid"
-                                        disabled={billBusy}
+                                        disabled={billBusy || (billRateLimitSeconds !== null && billRateLimitSeconds > 0)}
                                         onClick={() => void handleConfirmBill()}
                                     >
                                         {billBusy ? 'Solicitando…' : 'Pedir Conta'}

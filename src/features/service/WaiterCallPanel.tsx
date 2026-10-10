@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import {
     getWaiterRequestState,
     requestWaiter,
+    cancelWaiterRequest,
 } from './serviceRequests';
 import type { WaiterRequestState } from './serviceRequests';
 
@@ -406,6 +407,42 @@ function WaiterCallContent({
         }
     }
 
+    async function handleCancel() {
+        if (submitting.current || checking) return;
+
+        submitting.current = true;
+        setBusy(true);
+        setError('');
+
+        try {
+            await cancelWaiterRequest(restaurantSlug, tableNumber);
+
+            if (mounted.current) {
+                stateRevision.current += 1;
+                setState({
+                    guestSessionId: null,
+                    request: null,
+                });
+                setNow(Date.now());
+                setConfirming(false);
+            }
+        } catch (cause) {
+            if (mounted.current) {
+                setError(
+                    cause instanceof Error
+                        ? cause.message
+                        : 'Não foi possível cancelar seu chamado.',
+                );
+            }
+        } finally {
+            submitting.current = false;
+
+            if (mounted.current) {
+                setBusy(false);
+            }
+        }
+    }
+
     return (
         <section className="overflow-hidden rounded-2xl border border-black/10 bg-white">
             <div className="flex items-center justify-between gap-3 border-b border-black/5 px-4 py-3">
@@ -486,14 +523,24 @@ function WaiterCallContent({
                 )}
 
                 {pending ? (
-                    <button
-                        type="button"
-                        onClick={() => void handleRefresh()}
-                        disabled={busy || checking}
-                        className="min-h-12 w-full rounded-xl border border-black/20 px-4 font-medium disabled:opacity-50"
-                    >
-                        {busy ? 'Atualizando…' : 'Atualizar chamado'}
-                    </button>
+                    <div className="space-y-2">
+                        <button
+                            type="button"
+                            onClick={() => void handleRefresh()}
+                            disabled={busy || checking}
+                            className="min-h-12 w-full rounded-xl border border-black/20 px-4 font-medium disabled:opacity-50"
+                        >
+                            {busy ? 'Atualizando…' : 'Atualizar chamado'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void handleCancel()}
+                            disabled={busy || checking}
+                            className="min-h-11 w-full rounded-xl text-red-600 hover:bg-red-50 px-4 text-sm font-medium disabled:opacity-50 transition-colors"
+                        >
+                            {busy ? 'Cancelando…' : 'Cancelar chamado'}
+                        </button>
+                    </div>
                 ) : confirming ? (
                     <div
                         role="group"

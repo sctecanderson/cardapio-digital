@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { useOutletContext, useParams } from 'react-router';
+import { Link, useOutletContext, useParams } from 'react-router';
+import { supabase } from '../../lib/supabase';
 import type { StaffAccess } from '../auth/staffAuth';
 import {
     closeTableVisit,
-    listMyOpenTableVisits,
     listRestaurantTables,
+    listSalonOpenTableVisits,
     openTableVisit,
 } from './tableVisits';
-import type { OpenTableVisit, RestaurantTableItem } from './tableVisits';
+import type { RestaurantTableItem, SalonTableVisit } from './tableVisits';
 import { GuestConfirmationForm } from './GuestConfirmationForm';
 import { WaiterRequestsPanel } from './WaiterRequestsPanel';
 import { BillRequestsPanel } from './BillRequestsPanel';
@@ -43,10 +44,10 @@ function StaffSalonManager({
 }) {
     const submitting = useRef(false);
 
-    // Estado das mesas e atendimentos
+    // Estado das mesas cadastradas e de todos os atendimentos abertos no salão
     const [allTables, setAllTables] = useState<RestaurantTableItem[]>([]);
-    const [visits, setVisits] = useState<OpenTableVisit[]>([]);
-    const [selectedTableNumber, setSelectedTableNumber] = useState<number>(1);
+    const [salonVisits, setSalonVisits] = useState<SalonTableVisit[]>([]);
+    const [selectedTableNumber, setSelectedTableNumber] = useState<number | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
     const [loading, setLoading] = useState(true);
@@ -61,7 +62,7 @@ function StaffSalonManager({
     const [actionError, setActionError] = useState('');
     const [confirmCloseMesa, setConfirmCloseMesa] = useState(false);
 
-    // Horário formatado no topo (atualiza a cada minuto)
+    // Horário formatado no topo (atualiza a cada 30 segundos)
     const [currentTime, setCurrentTime] = useState(() => {
         const now = new Date();
         return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -78,7 +79,7 @@ function StaffSalonManager({
         return () => window.clearInterval(interval);
     }, []);
 
-    // Carrega mesas cadastradas no Supabase e atendimentos abertos do garçom
+    // 1. Carrega mesas reais do restaurante e TODOS os atendimentos abertos do salão
     useEffect(() => {
         let disposed = false;
 
@@ -89,42 +90,30 @@ function StaffSalonManager({
             try {
                 const [loadedTables, openVisits] = await Promise.all([
                     listRestaurantTables(restaurantId),
-                    listMyOpenTableVisits(restaurantId, memberId),
+                    listSalonOpenTableVisits(restaurantId),
                 ]);
 
                 if (!disposed) {
-                    // Garante que todas as mesas cadastradas (ou 1 a 20) estejam na lista
-                    const tableMap = new Map<number, RestaurantTableItem>();
+                    setAllTables(loadedTables);
+                    setSalonVisits(openVisits);
 
-                    // Adiciona mesas retornadas do banco
-                    for (const table of loadedTables) {
-                        tableMap.set(table.table_number, table);
-                    }
-
-                    // Se por algum motivo o banco tiver poucas mesas, assegura mesas 1 a 20
-                    for (let n = 1; n <= 20; n++) {
-                        if (!tableMap.has(n)) {
-                            tableMap.set(n, {
-                                id: `placeholder-${n}`,
-                                table_number: n,
-                                label: `Mesa ${String(n).padStart(2, '0')}`,
-                                active: true,
-                            });
-                        }
-                    }
-
-                    const sortedTables = Array.from(tableMap.values()).sort(
-                        (a, b) => a.table_number - b.table_number,
-                    );
-
-                    setAllTables(sortedTables);
-                    setVisits(openVisits);
-
-                    // Se não tiver mesa selecionada ou for a primeira carga, seleciona a primeira mesa com visita ou a mesa 1
+                    // Seleção automática da mesa:
+                    // 1. Mantém a selecionada se ainda existir;
+                    // 2. Senão, seleciona a primeira mesa em atendimento por mim;
+                    // 3. Senão, seleciona a primeira mesa cadastrada;
+                    // 4. Se não houver mesas cadastradas, null.
                     setSelectedTableNumber((curr) => {
-                        if (curr && tableMap.has(curr)) return curr;
-                        if (openVisits.length > 0) return openVisits[0].table.table_number;
-                        return 1;
+                        if (curr && loadedTables.some((t) => t.table_number === curr)) {
+                            return curr;
+                        }
+                        const myFirstVisit = openVisits.find((v) => v.assigned_member_id === memberId);
+                        if (myFirstVisit && loadedTables.some((t) => t.table_number === myFirstVisit.table.table_number)) {
+                            return myFirstVisit.table.table_number;
+                        }
+                        if (loadedTables.length > 0) {
+                            return loadedTables[0].table_number;
+                        }
+                        return null;
                     });
                 }
             } catch (cause) {
@@ -149,10 +138,58 @@ function StaffSalonManager({
         };
     }, [restaurantId, memberId, refresh]);
 
-    // Visita ativa da mesa selecionada
-    const currentVisit = visits.find(
-        (v) => v.table.table_number === selectedTableNumber,
-    );
+    // 2. Realtime + Polling para sincronização de atendimentos entre múltiplos garçons
+    useEffect(() => {
+        function scheduleRefresh() {
+            if (!document.hidden) {
+                setRefresh((c) => c + 1);
+            }
+        }
+
+        const pollInterval = window.setInterval(scheduleRefresh, 10000);
+        document.addEventListener('visibilitychange', scheduleRefresh);
+        window.addEventListener('online', scheduleRefresh);
+
+        const channel = supabase
+            .channel(`salon-realtime:${restaurantId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'table_visits',
+                    filter: `restaurant_id=eq.${restaurantId}`,
+                },
+                scheduleRefresh,
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'restaurant_tables',
+                    filter: `restaurant_id=eq.${restaurantId}`,
+                },
+                scheduleRefresh,
+            )
+            .subscribe();
+
+        return () => {
+            window.clearInterval(pollInterval);
+            document.removeEventListener('visibilitychange', scheduleRefresh);
+            window.removeEventListener('online', scheduleRefresh);
+            void supabase.removeChannel(channel);
+        };
+    }, [restaurantId]);
+
+    // Identificação do atendimento da mesa selecionada
+    const currentTableVisit = selectedTableNumber !== null
+        ? salonVisits.find((v) => v.table.table_number === selectedTableNumber)
+        : undefined;
+
+    const isMyVisit = currentTableVisit && currentTableVisit.assigned_member_id === memberId;
+    const isOtherStaffVisit = currentTableVisit && currentTableVisit.assigned_member_id !== memberId;
+    const isTableFree = !currentTableVisit;
 
     // Filtragem de mesas pela barra de busca
     const filteredTables = allTables.filter((table) => {
@@ -220,10 +257,38 @@ function StaffSalonManager({
         }
     }
 
+    // Estado vazio: Nenhuma mesa cadastrada no restaurante
+    if (!loading && allTables.length === 0) {
+        return (
+            <section className="mx-auto max-w-xl pb-12">
+                <div className="tab-hero-card" style={{ marginTop: '24px' }}>
+                    <div className="tab-hero-icon" style={{ background: '#f5efe6', color: '#8c7867' }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <line x1="3" y1="9" x2="21" y2="9" />
+                            <line x1="9" y1="21" x2="9" y2="9" />
+                        </svg>
+                    </div>
+                    <h2>Nenhuma mesa cadastrada</h2>
+                    <p>
+                        Este restaurante ainda não possui mesas ativas cadastradas no sistema. Cadastre as mesas no painel administrativo para iniciar os atendimentos do salão.
+                    </p>
+                    <Link
+                        to={`/${restaurantSlug}/admin/mesas`}
+                        className="tab-hero-primary-btn"
+                        style={{ maxWidth: '280px', minHeight: '44px', fontSize: '14px', textDecoration: 'none' }}
+                    >
+                        Cadastrar Mesas no Painel
+                    </Link>
+                </div>
+            </section>
+        );
+    }
+
     return (
         <section className="mx-auto max-w-xl pb-12">
             {/* =========================================================
-                TOPO: MESAS NO SALÃO + CARROSSEL HORIZONTAL (IMAGEM 1)
+                TOPO: MESAS NO SALÃO + CARROSSEL HORIZONTAL
                ========================================================= */}
             <div className="staff-salon-container border-t-0 pt-0 mt-0">
                 <div className="staff-salon-header-row">
@@ -238,7 +303,7 @@ function StaffSalonManager({
                     )}
                 </div>
 
-                {/* Barra de Busca de Mesa (para casos de 20 mesas) */}
+                {/* Barra de Busca de Mesa */}
                 <input
                     type="text"
                     placeholder="Buscar mesa (ex.: 02, 14)..."
@@ -251,13 +316,22 @@ function StaffSalonManager({
                 <div className="staff-tables-scroll-wrap" role="tablist" aria-label="Mesas do salão">
                     {filteredTables.map((table) => {
                         const isSelected = table.table_number === selectedTableNumber;
-                        const isOccupied = visits.some(
+                        const visit = salonVisits.find(
                             (v) => v.table.table_number === table.table_number,
                         );
 
+                        const isMine = visit && visit.assigned_member_id === memberId;
+                        const isOther = visit && visit.assigned_member_id !== memberId;
+
+                        const occupiedClass = isMine
+                            ? 'occupied'
+                            : isOther
+                                ? 'occupied other'
+                                : '';
+
                         return (
                             <button
-                                key={table.table_number}
+                                key={table.id}
                                 type="button"
                                 role="tab"
                                 aria-selected={isSelected}
@@ -267,7 +341,14 @@ function StaffSalonManager({
                                     setOpenTabsCount(0);
                                     setActionError('');
                                 }}
-                                className={`staff-table-btn ${isSelected ? 'active' : ''} ${isOccupied ? 'occupied' : ''}`}
+                                className={`staff-table-btn ${isSelected ? 'active' : ''} ${occupiedClass}`}
+                                title={
+                                    isMine
+                                        ? `Mesa ${table.table_number}: Em atendimento por você`
+                                        : isOther
+                                            ? `Mesa ${table.table_number}: Em atendimento por outro garçom`
+                                            : `Mesa ${table.table_number}: Livre`
+                                }
                             >
                                 {String(table.table_number).padStart(2, '0')}
                             </button>
@@ -283,142 +364,161 @@ function StaffSalonManager({
             )}
 
             {/* =========================================================
-                CARD PRINCIPAL: GERENCIAR MESA SELECIONADA (IMAGEM 2)
+                CARD PRINCIPAL: GERENCIAR MESA SELECIONADA
                ========================================================= */}
-            <div className="staff-manage-card">
-                {/* Cabeçalho da Mesa: Número, Horário e Status */}
-                <div className="staff-manage-header">
-                    <div>
-                        <h3 className="staff-manage-title">
-                            Gerenciar Mesa {String(selectedTableNumber).padStart(2, '0')}
-                        </h3>
-                        <span className="staff-manage-time">{currentTime}</span>
+            {selectedTableNumber !== null && (
+                <div className="staff-manage-card">
+                    {/* Cabeçalho da Mesa: Número, Horário e Status */}
+                    <div className="staff-manage-header">
+                        <div>
+                            <h3 className="staff-manage-title">
+                                Gerenciar Mesa {String(selectedTableNumber).padStart(2, '0')}
+                            </h3>
+                            <span className="staff-manage-time">{currentTime}</span>
+                        </div>
+
+                        <div className="text-right">
+                            {isMyVisit ? (
+                                <span className="staff-manage-badge">
+                                    Em atendimento por você
+                                </span>
+                            ) : isOtherStaffVisit ? (
+                                <span className="staff-manage-badge other">
+                                    Em atendimento por outro garçom
+                                </span>
+                            ) : (
+                                <span className="staff-manage-badge free">
+                                    Livre
+                                </span>
+                            )}
+                        </div>
                     </div>
 
-                    <div className="text-right">
-                        {currentVisit ? (
-                            <span className="staff-manage-badge">
-                                Em atendimento por você
-                            </span>
-                        ) : (
-                            <span className="staff-manage-badge free">
-                                Livre
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                {actionError && (
-                    <p role="alert" className="mt-3 text-xs text-red-700 bg-red-50 p-2.5 rounded-xl border border-red-200">
-                        {actionError}
-                    </p>
-                )}
-
-                {/* Se a mesa ainda não estiver em atendimento por este garçom */}
-                {!currentVisit && (
-                    <div className="mt-4 rounded-2xl bg-[#fff8ef] p-4 border border-[#e8dac8] text-center">
-                        <p className="text-xs text-[#6d5b4d] font-medium mb-3">
-                            Esta mesa ainda não possui atendimento ativo sob sua responsabilidade.
+                    {actionError && (
+                        <p role="alert" className="mt-3 text-xs text-red-700 bg-red-50 p-2.5 rounded-xl border border-red-200">
+                            {actionError}
                         </p>
-                        <button
-                            type="button"
-                            disabled={busyAction}
-                            onClick={() => void handleAssumeTable(selectedTableNumber)}
-                            className="staff-primary-action-btn w-full max-w-xs mx-auto"
-                        >
-                            {busyAction ? 'Iniciando atendimento…' : 'Assumir atendimento desta mesa'}
-                        </button>
-                    </div>
-                )}
+                    )}
 
-                {/* 1. SEÇÃO: CONFIRMAR ACESSO (6 CAIXAS DE DÍGITOS) */}
-                <GuestConfirmationForm
-                    restaurantSlug={restaurantSlug}
-                    tableNumber={selectedTableNumber}
-                    onConfirmed={() => {
-                        setRefresh((c) => c + 1);
-                    }}
-                />
-
-                {/* 2. SEÇÃO: CRIAR COMANDA E COMANDAS ABERTAS REAIS */}
-                {currentVisit ? (
-                    <TableTabsPanel
-                        restaurantSlug={restaurantSlug}
-                        restaurantId={restaurantId}
-                        tableVisitId={currentVisit.id}
-                        onOpenTabsCountChange={(count) => setOpenTabsCount(count)}
-                    />
-                ) : null}
-
-                {/* 3. SEÇÃO: ACESSOS E ENCERRAMENTO DA MESA */}
-                {currentVisit && (
-                    <div className="staff-closure-section">
-                        <ConfirmedGuestCount
-                            restaurantId={restaurantId}
-                            tableVisitId={currentVisit.id}
-                        />
-
-                        {openTabsCount > 0 ? (
-                            <div className="rounded-2xl bg-amber-50 p-3.5 border border-amber-200 text-xs text-amber-900 mb-2">
-                                <p className="font-semibold mb-1">
-                                    ⚠️ {openTabsCount} comanda(s) aberta(s) nesta mesa.
-                                </p>
-                                <p className="text-amber-800">
-                                    Encerre todas as comandas antes de finalizar o atendimento da mesa.
-                                </p>
-                            </div>
-                        ) : null}
-
-                        {confirmCloseMesa ? (
-                            <div className="rounded-2xl bg-red-50 p-4 border border-red-200">
-                                <p className="text-sm font-bold text-red-900 mb-1">
-                                    Encerrar o atendimento da Mesa {String(selectedTableNumber).padStart(2, '0')}?
-                                </p>
-                                <p className="text-xs text-red-800 mb-4">
-                                    Todas as sessões dos clientes vinculados a esta mesa serão revogadas.
-                                </p>
-                                <div className="flex gap-2">
-                                    <button
-                                        type="button"
-                                        disabled={busyAction || openTabsCount > 0}
-                                        onClick={() => void handleCloseVisit(currentVisit.id)}
-                                        className="staff-primary-action-btn bg-red-700 hover:bg-red-800 flex-1 text-xs"
-                                        style={{ background: '#b91c1c', border: 'none' }}
-                                    >
-                                        {busyAction ? 'Encerrando…' : 'Confirmar encerramento'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={busyAction}
-                                        onClick={() => setConfirmCloseMesa(false)}
-                                        className="staff-outline-action-btn px-4 text-xs"
-                                    >
-                                        Cancelar
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
+                    {/* Caso A: Mesa Livre */}
+                    {isTableFree && (
+                        <div className="mt-4 rounded-2xl bg-[#fff8ef] p-4 border border-[#e8dac8] text-center">
+                            <p className="text-xs text-[#6d5b4d] font-medium mb-3">
+                                Esta mesa está livre e disponível para atendimento.
+                            </p>
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (openTabsCount > 0) {
-                                        setActionError(`Existem ${openTabsCount} comanda(s) aberta(s). Encerre todas as comandas antes de finalizar o atendimento da mesa.`);
-                                        return;
-                                    }
-                                    setConfirmCloseMesa(true);
-                                    setActionError('');
-                                }}
-                                disabled={busyAction || openTabsCount > 0}
-                                className={`staff-full-close-btn ${openTabsCount > 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                disabled={busyAction}
+                                onClick={() => void handleAssumeTable(selectedTableNumber)}
+                                className="staff-primary-action-btn w-full max-w-xs mx-auto"
                             >
-                                {openTabsCount > 0
-                                    ? `Encerre as comandas para finalizar a mesa (${openTabsCount} aberta${openTabsCount > 1 ? 's' : ''})`
-                                    : 'Encerrar atendimento da mesa'}
+                                {busyAction ? 'Iniciando atendimento…' : 'Assumir atendimento desta mesa'}
                             </button>
-                        )}
-                    </div>
-                )}
-            </div>
+                        </div>
+                    )}
+
+                    {/* Caso B: Mesa em atendimento por outro funcionário */}
+                    {isOtherStaffVisit && (
+                        <div className="mt-4 rounded-2xl bg-[#fffbeb] p-4 border border-[#fef3c7] text-center">
+                            <div className="text-amber-800 text-xs font-semibold mb-1">
+                                ⚠️ Mesa ocupada
+                            </div>
+                            <p className="text-xs text-amber-700 font-medium">
+                                Esta mesa já está sendo atendida por outro membro da equipe. Apenas o responsável pode confirmar clientes, administrar comandas ou encerrar o atendimento.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Caso C: Mesa em atendimento por mim */}
+                    {isMyVisit && currentTableVisit && (
+                        <>
+                            {/* 1. SEÇÃO: CONFIRMAR ACESSO (6 CAIXAS DE DÍGITOS) */}
+                            <GuestConfirmationForm
+                                restaurantSlug={restaurantSlug}
+                                tableNumber={selectedTableNumber}
+                                onConfirmed={() => {
+                                    setRefresh((c) => c + 1);
+                                }}
+                            />
+
+                            {/* 2. SEÇÃO: CRIAR COMANDA E COMANDAS ABERTAS REAIS */}
+                            <TableTabsPanel
+                                restaurantSlug={restaurantSlug}
+                                restaurantId={restaurantId}
+                                tableVisitId={currentTableVisit.id}
+                                onOpenTabsCountChange={(count) => setOpenTabsCount(count)}
+                            />
+
+                            {/* 3. SEÇÃO: ACESSOS E ENCERRAMENTO DA MESA */}
+                            <div className="staff-closure-section">
+                                <ConfirmedGuestCount
+                                    restaurantId={restaurantId}
+                                    tableVisitId={currentTableVisit.id}
+                                />
+
+                                {openTabsCount > 0 ? (
+                                    <div className="rounded-2xl bg-amber-50 p-3.5 border border-amber-200 text-xs text-amber-900 mb-2">
+                                        <p className="font-semibold mb-1">
+                                            ⚠️ {openTabsCount} comanda(s) aberta(s) nesta mesa.
+                                        </p>
+                                        <p className="text-amber-800">
+                                            Encerre todas as comandas antes de finalizar o atendimento da mesa.
+                                        </p>
+                                    </div>
+                                ) : null}
+
+                                {confirmCloseMesa ? (
+                                    <div className="rounded-2xl bg-red-50 p-4 border border-red-200">
+                                        <p className="text-sm font-bold text-red-900 mb-1">
+                                            Encerrar o atendimento da Mesa {String(selectedTableNumber).padStart(2, '0')}?
+                                        </p>
+                                        <p className="text-xs text-red-800 mb-4">
+                                            Todas as sessões dos clientes vinculados a esta mesa serão revogadas.
+                                        </p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={busyAction || openTabsCount > 0}
+                                                onClick={() => void handleCloseVisit(currentTableVisit.id)}
+                                                className="staff-primary-action-btn bg-red-700 hover:bg-red-800 flex-1 text-xs"
+                                                style={{ background: '#b91c1c', border: 'none' }}
+                                            >
+                                                {busyAction ? 'Encerrando…' : 'Confirmar encerramento'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={busyAction}
+                                                onClick={() => setConfirmCloseMesa(false)}
+                                                className="staff-outline-action-btn px-4 text-xs"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (openTabsCount > 0) {
+                                                setActionError(`Existem ${openTabsCount} comanda(s) aberta(s). Encerre todas as comandas antes de finalizar o atendimento da mesa.`);
+                                                return;
+                                            }
+                                            setConfirmCloseMesa(true);
+                                            setActionError('');
+                                        }}
+                                        disabled={busyAction || openTabsCount > 0}
+                                        className={`staff-full-close-btn ${openTabsCount > 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    >
+                                        {openTabsCount > 0
+                                            ? `Encerre as comandas para finalizar a mesa (${openTabsCount} aberta${openTabsCount > 1 ? 's' : ''})`
+                                            : 'Encerrar atendimento da mesa'}
+                                    </button>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
 
             {/* =========================================================
                 PAINÉIS DE CHAMADOS E PEDIDOS DE CONTA EM TEMPO REAL

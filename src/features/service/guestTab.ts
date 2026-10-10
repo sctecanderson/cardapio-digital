@@ -31,91 +31,108 @@ export type GuestTabState =
       totalInCents?: number;
     });
 
+export interface GuestTableTabSessionRpcResult {
+  session_id: string;
+  restaurant_id: string;
+  restaurant_table_id: string;
+  status: 'pending' | 'active' | 'revoked' | 'expired';
+  table_visit_id: string | null;
+  table_tab_id: string | null;
+  tab_status: 'open' | 'closed' | null;
+  tab_label: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
 export async function getGuestTabState(
   restaurantSlug: string,
   tableNumber: number,
 ): Promise<GuestTabState> {
   const base: StateBase = { userId: null, guestSessionId: null, tabId: null };
-  const { data: authData, error: authError } = await supabase.auth.getSession();
-  if (authError) throw new Error('Não foi possível verificar seu acesso.');
-  const user = authData.session?.user;
-  if (!user?.is_anonymous) return { ...base, status: 'hidden' };
-  base.userId = user.id;
 
-  // Consultar a sessão mais recente do usuário anônimo
-  const { data: latestSession, error: sessionError } = await supabase
-    .from('guest_sessions')
-    .select('id, status, table_visit_id, restaurant_table_id, created_at, expires_at')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-    .overrideTypes<{
-      id: string;
-      status: 'pending' | 'active' | 'revoked' | 'expired';
-      table_visit_id: string | null;
-      restaurant_table_id: string;
-      created_at: string;
-      expires_at: string;
-    }, { merge: false }>();
-
-  if (sessionError) {
-    throw new Error('Não foi possível recuperar sua presença na mesa.');
-  }
-
-  if (!latestSession) {
+  if (
+    !restaurantSlug ||
+    typeof restaurantSlug !== 'string' ||
+    !Number.isInteger(tableNumber) ||
+    tableNumber < 1 ||
+    tableNumber > 999
+  ) {
     return { ...base, status: 'hidden' };
   }
 
-  base.guestSessionId = latestSession.id;
+  const { data: authData, error: authError } = await supabase.auth.getSession();
+  if (authError) {
+    throw new Error('Não foi possível verificar seu acesso.');
+  }
 
-  // Se a sessão foi revogada (pelo encerramento da mesa ou da visita)
-  if (latestSession.status === 'revoked') {
+  const user = authData.session?.user;
+  if (!user?.is_anonymous) {
+    return { ...base, status: 'hidden' };
+  }
+  base.userId = user.id;
+
+  // Consulta atômica no servidor através da RPC get_guest_table_tab_session
+  // Pré-requisito: migration 20261010090000_get_guest_table_tab_session.sql
+  const { data: rpcData, error: rpcError } = await supabase
+    .rpc('get_guest_table_tab_session', {
+      p_restaurant_slug: restaurantSlug,
+      p_table_number: tableNumber,
+    })
+    .maybeSingle()
+    .overrideTypes<GuestTableTabSessionRpcResult, { merge: false }>();
+
+  if (rpcError) {
+    throw new Error(`Não foi possível carregar os dados da mesa: ${rpcError.message}`);
+  }
+
+  // RPC bem-sucedida sem resultado: mesa/cliente sem sessão vinculada
+  if (!rpcData) {
+    return { ...base, status: 'hidden' };
+  }
+
+  base.guestSessionId = rpcData.session_id;
+
+  if (rpcData.status === 'revoked') {
     return { ...base, status: 'closed' };
   }
 
-  if (latestSession.status === 'pending') {
-    return { ...base, status: 'waiting', guestStatus: 'pending' };
-  }
-
-  if (latestSession.status !== 'active') {
+  if (rpcData.status === 'expired') {
     return { ...base, status: 'hidden' };
   }
 
-  // Para sessão ativa, buscar o vínculo da comanda
-  const { data: link, error: linkError } = await supabase
-    .from('table_tab_guests')
-    .select('table_tab_id')
-    .eq('guest_session_id', latestSession.id)
-    .maybeSingle()
-    .overrideTypes<{ table_tab_id: string }, { merge: false }>();
-
-  if (linkError) throw new Error('Não foi possível localizar sua comanda.');
-  if (!link) return { ...base, status: 'waiting', guestStatus: 'active' };
-
-  base.tabId = link.table_tab_id;
-
-  const { data: tab, error: tabError } = await supabase
-    .from('table_tabs')
-    .select('id, restaurant_id, label, status')
-    .eq('id', link.table_tab_id)
-    .maybeSingle()
-    .overrideTypes<GuestTabReference, { merge: false }>();
-
-  if (tabError) throw new Error('Não foi possível carregar sua comanda.');
-  if (!tab) return { ...base, status: 'hidden' };
-
-  if (tab.status === 'closed') {
-    return { ...base, status: 'closed', tab };
+  if (rpcData.status === 'pending') {
+    return { ...base, status: 'waiting', guestStatus: 'pending' };
   }
 
-  const consumption = await getTabConsumption(tab.restaurant_id, tab.id);
+  if (rpcData.status === 'active') {
+    if (!rpcData.table_tab_id) {
+      return { ...base, status: 'waiting', guestStatus: 'active' };
+    }
 
-  return {
-    ...base,
-    status: 'ready',
-    tabId: tab.id,
-    tab,
-    items: consumption.items,
-    totalInCents: consumption.totalInCents,
-  };
+    base.tabId = rpcData.table_tab_id;
+
+    const tab: GuestTabReference = {
+      id: rpcData.table_tab_id,
+      restaurant_id: rpcData.restaurant_id,
+      label: rpcData.tab_label || 'Comanda da Mesa',
+      status: rpcData.tab_status === 'closed' ? 'closed' : 'open',
+    };
+
+    if (tab.status === 'closed') {
+      return { ...base, status: 'closed', tab };
+    }
+
+    const consumption = await getTabConsumption(tab.restaurant_id, tab.id);
+
+    return {
+      ...base,
+      status: 'ready',
+      tabId: tab.id,
+      tab,
+      items: consumption.items,
+      totalInCents: consumption.totalInCents,
+    };
+  }
+
+  return { ...base, status: 'hidden' };
 }

@@ -50,6 +50,41 @@ export interface OpenTableVisit extends TableVisit {
   };
 }
 
+export interface SalonTableVisit extends TableVisit {
+  table: {
+    table_number: number;
+  };
+}
+
+export async function listSalonOpenTableVisits(
+  restaurantId: string,
+): Promise<SalonTableVisit[]> {
+  const { data, error } = await supabase
+    .from('table_visits')
+    .select(`
+      id,
+      restaurant_id,
+      restaurant_table_id,
+      assigned_member_id,
+      status,
+      opened_at,
+      closed_at,
+      table:restaurant_tables!inner(table_number)
+    `)
+    .eq('restaurant_id', restaurantId)
+    .eq('status', 'open')
+    .order('opened_at', { ascending: false })
+    .overrideTypes<SalonTableVisit[], { merge: false }>();
+
+  if (error) {
+    throw new Error(
+      'Não foi possível carregar os atendimentos do salão. Tente novamente.',
+    );
+  }
+
+  return data ?? [];
+}
+
 export async function listMyOpenTableVisits(
   restaurantId: string,
   memberId: string,

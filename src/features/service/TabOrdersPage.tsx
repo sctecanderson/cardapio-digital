@@ -32,14 +32,128 @@ function formatCountdown(seconds: number) {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+/**
+ * Componente principal da página de Comanda.
+ * Valida a mesa e usa key de contexto exclusivo no componente interno
+ * para garantir destruição e recriação imediata de todo estado local ao mudar de mesa/restaurante.
+ */
 export function TabOrdersPage() {
     const { restaurantSlug = '' } = useParams();
     const table = useTableContext();
     const { restaurant } = useRestaurant();
-    const { menu } = usePublicMenu();
 
-    const tableQuery = table.status === 'unverified' ? `?mesa=${table.tableNumber}` : '';
-    const tableNumber = table.status === 'unverified' ? Number(table.tableNumber) : 7;
+    const hasValidTable = table.status === 'unverified';
+    const tableNumber = hasValidTable ? Number(table.tableNumber) : null;
+    const tableQuery = hasValidTable ? `?mesa=${table.tableNumber}` : '';
+
+    if (!hasValidTable || tableNumber === null) {
+        return (
+            <div className="tab-orders-page">
+                <header className="tab-orders-header">
+                    <div className="tab-orders-title-row">
+                        <h1 className="tab-orders-title">Comanda Digital</h1>
+                        <span className="tab-orders-status-badge">
+                            Mesa Não Identificada
+                        </span>
+                    </div>
+
+                    <div className="tab-orders-meta-row">
+                        <span className="tab-meta-item">
+                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                            </svg>
+                            {restaurant?.name || 'Restaurante'}
+                        </span>
+                        <span className="tab-meta-divider">/</span>
+                        <span className="tab-meta-item">
+                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                            </svg>
+                            QR Code Necessário
+                        </span>
+                    </div>
+                </header>
+
+                <div className="tab-hero-card">
+                    <div className="tab-hero-icon" style={{ background: '#f3eee6', color: '#705e50' }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="7" height="7" />
+                            <rect x="14" y="3" width="7" height="7" />
+                            <rect x="3" y="14" width="7" height="7" />
+                            <rect x="14" y="14" width="7" height="7" />
+                        </svg>
+                    </div>
+                    <h2>Mesa não identificada</h2>
+                    <p>
+                        Para abrir sua comanda, chamar o garçom e acompanhar seus pedidos em tempo real, aponte a câmera do seu celular para o QR Code da sua mesa.
+                    </p>
+                    <Link
+                        to={`/${restaurantSlug}`}
+                        className="tab-hero-primary-btn"
+                        style={{ maxWidth: '280px', minHeight: '44px', fontSize: '14px', textDecoration: 'none' }}
+                    >
+                        Ver Cardápio Digital
+                    </Link>
+                </div>
+
+                <nav className="home-bottom-nav" aria-label="Ações da mesa">
+                    <Link to={`/${restaurantSlug}`}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                            <polyline points="9 22 9 12 15 12 15 22" />
+                        </svg>
+                        <span>Início</span>
+                    </Link>
+
+                    <button
+                        type="button"
+                        disabled
+                        style={{ opacity: 0.45, cursor: 'not-allowed' }}
+                        title="Identifique sua mesa por QR Code primeiro"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                        </svg>
+                        <span>Chamar Garçom</span>
+                    </button>
+
+                    <Link to={`/${restaurantSlug}/comanda`} className="active" aria-current="page">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 3 2V2l-3 2-3-2-3 2-3-2-3 2-3-2z" />
+                            <line x1="8" y1="8" x2="16" y2="8" />
+                            <line x1="8" y1="12" x2="16" y2="12" />
+                            <line x1="8" y1="16" x2="12" y2="16" />
+                        </svg>
+                        <span>Comanda</span>
+                    </Link>
+                </nav>
+            </div>
+        );
+    }
+
+    return (
+        <TabOrdersContent
+            key={`${restaurantSlug}:${tableNumber}`}
+            restaurantSlug={restaurantSlug}
+            tableNumber={tableNumber}
+            tableQuery={tableQuery}
+        />
+    );
+}
+
+interface TabOrdersContentProps {
+    restaurantSlug: string;
+    tableNumber: number;
+    tableQuery: string;
+}
+
+function TabOrdersContent({
+    restaurantSlug,
+    tableNumber,
+    tableQuery,
+}: TabOrdersContentProps) {
+    const { menu } = usePublicMenu();
     const tableLabel = `Mesa ${String(tableNumber).padStart(2, '0')}`;
 
     const [activeAction, setActiveAction] = useState<ServiceActionType>(null);
@@ -48,58 +162,78 @@ export function TabOrdersPage() {
     const [confirmationCode, setConfirmationCode] = useState<GuestConfirmationCode | null>(null);
     const [codeRemaining, setCodeRemaining] = useState(0);
     const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+
+    // Separação entre primeira carga do contexto e sincronização em segundo plano
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [syncWarning, setSyncWarning] = useState<string | null>(null);
+
     const [revision, setRevision] = useState(0);
     const requestVersion = useRef(0);
+    const actionVersion = useRef(0);
+    const isMountedRef = useRef(true);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
 
     const refresh = useCallback(() => {
         requestVersion.current += 1;
         setRevision((prev) => prev + 1);
     }, []);
 
-    // 1. Carregar sessão de cliente da mesa e código de confirmação
+    // Carregamento de sessão e comanda para o contexto atual
     useEffect(() => {
-        if (!restaurantSlug || table.status !== 'unverified') return;
-        let disposed = false;
+        let isDisposed = false;
+        const currentReqVersion = ++requestVersion.current;
+        const isRequestValid = () => !isDisposed && isMountedRef.current && currentReqVersion === requestVersion.current;
 
-        async function loadSession() {
+        async function loadContextData() {
+            // Não define isInitialLoading como true durante atualizações em segundo plano
             try {
-                const res = await getGuestSessionState(restaurantSlug, tableNumber);
-                if (!disposed) {
-                    setGuestSession(res.session);
-                    setConfirmationCode(res.code);
-                    setCodeRemaining(res.code ? secondsUntil(res.code.expires_at) : 0);
+                const [sessionRes, tabRes] = await Promise.all([
+                    getGuestSessionState(restaurantSlug, tableNumber),
+                    getGuestTabState(restaurantSlug, tableNumber),
+                ]);
+
+                if (isRequestValid()) {
+                    setGuestSession(sessionRes.session);
+                    setConfirmationCode(sessionRes.code);
+                    setCodeRemaining(sessionRes.code ? secondsUntil(sessionRes.code.expires_at) : 0);
+                    setTabState(tabRes);
+                    setIsInitialLoading(false);
+                    setErrorMessage(null);
+                    setSyncWarning(null);
                 }
-            } catch {
-                // Silencia falha se não houver sessão ativa
+            } catch (err) {
+                if (isRequestValid()) {
+                    const message = err instanceof Error
+                        ? err.message
+                        : 'Não foi possível carregar as informações da mesa.';
+
+                    if (isInitialLoading) {
+                        // Falha na primeira carga do contexto: mostra card de erro
+                        setIsInitialLoading(false);
+                        setErrorMessage(message);
+                    } else {
+                        // Falha durante atualização em segundo plano: preserva dados e avisa
+                        setSyncWarning('Não foi possível sincronizar os dados da mesa em tempo real.');
+                    }
+                }
             }
         }
 
-        void loadSession();
-        return () => { disposed = true; };
-    }, [restaurantSlug, table.status, tableNumber, revision]);
+        void loadContextData();
 
-    // 2. Carregar consumo e comanda vinculada no Supabase
-    useEffect(() => {
-        if (!restaurantSlug || table.status !== 'unverified') return;
-        let disposed = false;
-        const currentVersion = requestVersion.current;
+        return () => {
+            isDisposed = true;
+        };
+    }, [restaurantSlug, tableNumber, revision]);
 
-        async function loadTab() {
-            try {
-                const res = await getGuestTabState(restaurantSlug, tableNumber);
-                if (!disposed && currentVersion === requestVersion.current) {
-                    setTabState(res);
-                }
-            } catch {
-                // Silencia falha caso ainda não esteja confirmada
-            }
-        }
-
-        void loadTab();
-        return () => { disposed = true; };
-    }, [restaurantSlug, table.status, tableNumber, revision]);
-
-    // 3. Temporizador do código de confirmação
+    // Temporizador do código de confirmação
     useEffect(() => {
         if (!confirmationCode || codeRemaining <= 0) return;
 
@@ -114,17 +248,16 @@ export function TabOrdersPage() {
         return () => window.clearInterval(interval);
     }, [confirmationCode, codeRemaining]);
 
-    // 4. Inscrição Realtime no Supabase para sincronizar automaticamente com o painel /equipe
+    // Inscrição Realtime no Supabase restrita à mesa atual
     useEffect(() => {
         const userId = tabState?.userId;
         const guestId = tabState?.guestSessionId || guestSession?.id;
         const tabId = tabState?.tabId;
 
         function scheduleRefresh() {
-            if (!document.hidden) refresh();
+            if (!document.hidden && isMountedRef.current) refresh();
         }
 
-        // Polling ativo a cada 4 segundos caso haja comanda aberta ou código pendente
         const pollTimer = window.setInterval(scheduleRefresh, 4000);
         document.addEventListener('visibilitychange', scheduleRefresh);
 
@@ -156,27 +289,48 @@ export function TabOrdersPage() {
         };
     }, [tabState?.userId, tabState?.guestSessionId, tabState?.tabId, guestSession?.id, restaurantSlug, tableNumber, refresh]);
 
-    // Função para gerar a comanda / código para o garçom
+    // Geração de comanda protegida contra concorrência e desmontagem
     async function handleGenerateCode() {
         if (isGeneratingCode) return;
         setIsGeneratingCode(true);
+        setErrorMessage(null);
+
+        const currentAction = ++actionVersion.current;
+        const isActionValid = () => isMountedRef.current && currentAction === actionVersion.current;
+
         try {
             const session = await startGuestSession(restaurantSlug, tableNumber);
+            if (!isActionValid()) return;
+
             setGuestSession(session);
+
             if (session.status === 'pending') {
+                if (!isActionValid()) return;
                 const code = await issueGuestConfirmationCode(session.id);
+                if (!isActionValid()) return;
+
                 setConfirmationCode(code);
                 setCodeRemaining(secondsUntil(code.expires_at));
             }
-            refresh();
+
+            if (isActionValid()) {
+                refresh();
+            }
         } catch (err) {
-            console.error('Erro ao gerar comanda para o garçom:', err);
+            if (isActionValid()) {
+                setErrorMessage(
+                    err instanceof Error
+                        ? err.message
+                        : 'Não foi possível gerar a comanda para o garçom.',
+                );
+            }
         } finally {
-            setIsGeneratingCode(false);
+            if (isActionValid()) {
+                setIsGeneratingCode(false);
+            }
         }
     }
 
-    // Função para reiniciar/abrir nova comanda após fechamento
     function handleResetTab() {
         setTabState(null);
         setGuestSession(null);
@@ -184,14 +338,74 @@ export function TabOrdersPage() {
         void handleGenerateCode();
     }
 
-    // Determinação dos estados da Comanda
-    const isClosed = tabState?.status === 'closed' || guestSession?.status === 'revoked';
-    const isReady = !isClosed && tabState?.status === 'ready';
-    const hasCode = !isClosed && !isReady && guestSession?.status === 'pending' && !!confirmationCode && codeRemaining > 0;
-    const isWaiting = !isClosed && !isReady && (tabState?.status === 'waiting' || (guestSession?.status === 'pending' && !hasCode));
-    const isInitial = !isClosed && !isReady && !hasCode && !isWaiting;
+    // =========================================================================
+    // MÁQUINA DE ESTADOS MUTUAMENTE EXCLUSIVOS
+    // Garante que nunca ocorram exibições sobrepostas ou contraditórias na tela.
+    // =========================================================================
 
-    // Buscar imagens do catálogo para os itens da comanda
+    // 1. Identificar se o atendimento ou comanda foi encerrado
+    const isRevokedOrClosed =
+        tabState?.status === 'closed' ||
+        guestSession?.status === 'revoked';
+
+    // 2. Identificar se a sessão é pendente (aguardando garçom confirmar no painel dele)
+    const isPendingSession =
+        !isRevokedOrClosed &&
+        (guestSession?.status === 'pending' ||
+            (tabState?.status === 'waiting' && tabState?.guestStatus === 'pending'));
+
+    // 3. Identificar se há código emitido válido (com tempo restante)
+    const hasValidCode =
+        isPendingSession &&
+        !!confirmationCode &&
+        codeRemaining > 0;
+
+    // 4. Identificar se a sessão expirou no servidor
+    const isExpiredSession =
+        !isRevokedOrClosed &&
+        (((guestSession?.status as string | undefined) === 'expired') ||
+            (tabState?.status === 'hidden' && (guestSession?.status as string | undefined) === 'expired'));
+
+    // 5. Identificar se a comanda já está aberta com consumo
+    const isTabReady =
+        !isRevokedOrClosed &&
+        !isPendingSession &&
+        !isExpiredSession &&
+        tabState?.status === 'ready';
+
+    // 6. Identificar se a mesa foi confirmada no sistema, aguardando o garçom vincular a comanda
+    // IMPORTANTE: Nunca é verdadeiro quando guestStatus for 'pending'!
+    const isActiveConfirmed =
+        !isRevokedOrClosed &&
+        !isPendingSession &&
+        !isExpiredSession &&
+        !isTabReady &&
+        (guestSession?.status === 'active' ||
+            (tabState?.status === 'waiting' && tabState?.guestStatus === 'active'));
+
+    // Determinar o modo único da tela
+    type TabScreenMode =
+        | 'closed'
+        | 'ready'
+        | 'active_waiting_tab'
+        | 'pending_with_code'
+        | 'pending_no_code'
+        | 'initial';
+
+    let mode: TabScreenMode = 'initial';
+
+    if (isRevokedOrClosed) {
+        mode = 'closed';
+    } else if (isTabReady) {
+        mode = 'ready';
+    } else if (isActiveConfirmed) {
+        mode = 'active_waiting_tab';
+    } else if (isPendingSession) {
+        mode = hasValidCode ? 'pending_with_code' : 'pending_no_code';
+    } else {
+        mode = 'initial';
+    }
+
     const getProductImage = (name: string) => {
         const found = menu?.products.find((p) =>
             p.name.toLowerCase().includes(name.toLowerCase()) ||
@@ -200,8 +414,8 @@ export function TabOrdersPage() {
         return found?.images[0]?.url;
     };
 
-    // Itens reais vindos do Supabase
-    const realItems = isReady && tabState ? tabState.items : [];
+    const readyTab = mode === 'ready' && tabState?.status === 'ready' ? tabState : null;
+    const realItems = readyTab ? readyTab.items : [];
     const hasRealItems = realItems.length > 0;
 
     const displayItems = realItems.map((item) => ({
@@ -213,9 +427,32 @@ export function TabOrdersPage() {
         imageUrl: getProductImage(item.product_name),
     }));
 
-    const subtotalInCents = isReady && tabState ? tabState.totalInCents : 0;
+    const subtotalInCents = readyTab ? readyTab.totalInCents : 0;
     const serviceFeeInCents = Math.round(subtotalInCents * 0.1);
     const totalInCents = subtotalInCents + serviceFeeInCents;
+
+    // Badge do Header
+    const statusBadgeText = isInitialLoading
+        ? 'Carregando…'
+        : mode === 'closed'
+            ? 'Atendimento Encerrado'
+            : mode === 'ready'
+                ? 'Comanda Aberta'
+                : mode === 'active_waiting_tab'
+                    ? 'Mesa Confirmada'
+                    : mode === 'pending_with_code' || mode === 'pending_no_code'
+                        ? 'Aguardando Garçom'
+                        : 'Sem Comanda';
+
+    const statusBadgeClass = `tab-orders-status-badge ${
+        mode === 'closed'
+            ? 'tab-closed-badge'
+            : mode === 'ready'
+                ? 'active'
+                : mode === 'active_waiting_tab' || mode === 'pending_with_code' || mode === 'pending_no_code'
+                    ? 'waiting'
+                    : ''
+    }`;
 
     return (
         <div className="tab-orders-page">
@@ -223,24 +460,8 @@ export function TabOrdersPage() {
             <header className="tab-orders-header">
                 <div className="tab-orders-title-row">
                     <h1 className="tab-orders-title">Consumo da {tableLabel}</h1>
-                    <span className={`tab-orders-status-badge ${
-                        isClosed
-                            ? 'tab-closed-badge'
-                            : isReady
-                                ? 'active'
-                                : hasCode || isWaiting
-                                    ? 'waiting'
-                                    : ''
-                    }`}>
-                        {isClosed
-                            ? 'Atendimento Encerrado'
-                            : isReady
-                                ? 'Comanda Aberta'
-                                : hasCode
-                                    ? 'Aguardando Garçom'
-                                    : isWaiting
-                                        ? 'Mesa Confirmada'
-                                        : 'Sem Comanda'}
+                    <span className={statusBadgeClass}>
+                        {statusBadgeText}
                     </span>
                 </div>
 
@@ -249,215 +470,311 @@ export function TabOrdersPage() {
                         <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                         </svg>
-                        {isReady ? 'Mesa Ativa' : tableLabel}
+                        {mode === 'ready' ? 'Mesa Ativa' : tableLabel}
                     </span>
                     <span className="tab-meta-divider">/</span>
                     <span className="tab-meta-item">
                         <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                         </svg>
-                        {isReady ? `Comanda: ${tabState.tab.label}` : 'Atendimento Digital'}
+                        {mode === 'ready' && tabState?.status === 'ready'
+                            ? `Comanda: ${tabState.tab.label}`
+                            : 'Atendimento Digital'}
                     </span>
                 </div>
             </header>
 
-            {/* ESTADO 1: Inicial - Gerar Comanda */}
-            {isInitial && (
-                <div className="tab-hero-card">
-                    <div className="tab-hero-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                            <polyline points="10 9 9 9 8 9" />
-                        </svg>
-                    </div>
-                    <h2>Abra sua Comanda</h2>
-                    <p>
-                        Gere o número da comanda desta mesa para apresentar ao garçom. Ele lançará seus pedidos e você acompanhará tudo em tempo real.
-                    </p>
+            {/* Aviso discreto de sincronização em segundo plano (mantém a tela intacta) */}
+            {syncWarning && !isInitialLoading && !errorMessage && (
+                <div style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fef3c7',
+                    borderRadius: '12px',
+                    padding: '10px 14px',
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '13px',
+                    color: '#92400e',
+                }}>
+                    <span>⚠️ {syncWarning}</span>
                     <button
                         type="button"
-                        className="tab-hero-primary-btn"
-                        onClick={handleGenerateCode}
-                        disabled={isGeneratingCode}
+                        onClick={refresh}
+                        style={{
+                            background: '#fef3c7',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '4px 10px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: '#78350f',
+                            cursor: 'pointer',
+                        }}
                     >
-                        {isGeneratingCode ? (
-                            'Gerando comanda…'
-                        ) : (
-                            <>
-                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="12" y1="5" x2="12" y2="19" />
-                                    <line x1="5" y1="12" x2="19" y2="12" />
-                                </svg>
-                                <span>Gerar Comanda</span>
-                            </>
-                        )}
+                        Atualizar
                     </button>
                 </div>
             )}
 
-            {/* ESTADO 2: Código Gerado - Aguardando Garçom colocar na tela dele */}
-            {hasCode && (
-                <div className="tab-code-highlight-card">
-                    <span className="tab-code-title">Informe este código ao garçom</span>
-                    <div className="tab-code-big-number">
-                        {confirmationCode?.code.slice(0, 3)} {confirmationCode?.code.slice(3)}
-                    </div>
-                    <div className="tab-code-timer-badge">
-                        <span>⏱️ Válido por:</span>
-                        <strong>{formatCountdown(codeRemaining)}</strong>
-                    </div>
-                    <p className="tab-code-instruction">
-                        O garçom inserirá este número no sistema para iniciar o atendimento e começar a registrar os pedidos da sua mesa.
-                    </p>
+            {/* Estado de Carregamento Inicial (somente na primeira consulta da montagem) */}
+            {isInitialLoading && (
+                <div className="tab-hero-card">
                     <div className="tab-code-waiting-pulse">
                         <span className="tab-pulse-dot" />
-                        <span>Aguardando o garçom confirmar e lançar os pedidos…</span>
+                        <span>Carregando dados da {tableLabel}…</span>
                     </div>
-                    <button
-                        type="button"
-                        className="tab-renew-code-btn"
-                        onClick={handleGenerateCode}
-                        disabled={isGeneratingCode}
-                    >
-                        {isGeneratingCode ? 'Gerando novo código…' : 'Gerar novo código'}
-                    </button>
                 </div>
             )}
 
-            {/* ESTADO 3: Mesa confirmada - Aguardando vínculo/primeiro pedido */}
-            {isWaiting && (
-                <div className="tab-hero-card">
-                    <div className="tab-hero-icon" style={{ background: '#fef3c7', color: '#b45309' }}>
+            {/* Falha na Primeira Consulta (com botão de tentar novamente) */}
+            {!isInitialLoading && errorMessage && (
+                <div className="tab-hero-card" style={{ borderColor: '#fca5a5', background: '#fff5f5' }}>
+                    <div className="tab-hero-icon" style={{ background: '#fee2e2', color: '#b91c1c' }}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
                         </svg>
                     </div>
-                    <h2>Presença Confirmada!</h2>
-                    <p>
-                        O garçom já confirmou sua mesa no sistema. Ele está preparando sua comanda e logo começará a lançar os pedidos.
-                    </p>
-                    <div className="tab-code-waiting-pulse">
-                        <span className="tab-pulse-dot" />
-                        <span>Sincronizando com o atendimento…</span>
-                    </div>
-                </div>
-            )}
-
-            {/* ESTADO 4: Comanda Aberta - Acompanhamento dos Pedidos em Tempo Real */}
-            {isReady && (
-                <section className="tab-orders-section">
-                    <div className="tab-orders-section-heading">
-                        <h2>Pedidos da Mesa</h2>
-                        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="clock-icon">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-
-                    {!hasRealItems ? (
-                        <div className="tab-empty-orders-box">
-                            <span className="empty-icon">🍽️</span>
-                            <h3>Comanda conectada!</h3>
-                            <p>
-                                Nenhum pedido lançado ainda. Assim que o garçom registrar seus pedidos na tela dele, eles aparecerão aqui em tempo real.
-                            </p>
-                            <Link
-                                to={`/${restaurantSlug}${tableQuery}`}
-                                className="tab-hero-primary-btn"
-                                style={{ maxWidth: '240px', minHeight: '44px', fontSize: '14px', textDecoration: 'none' }}
-                            >
-                                Ver Cardápio
-                            </Link>
-                        </div>
-                    ) : (
-                        <>
-                            <ul className="tab-orders-list">
-                                {displayItems.map((item) => (
-                                    <li key={item.id} className="tab-order-item">
-                                        <div className="tab-order-avatar">
-                                            {item.imageUrl ? (
-                                                <img src={item.imageUrl} alt={item.name} loading="lazy" />
-                                            ) : (
-                                                <span className="tab-order-avatar-fallback">🍽️</span>
-                                            )}
-                                        </div>
-
-                                        <div className="tab-order-details">
-                                            <span className="tab-order-name">{item.name}</span>
-                                            <span className="tab-order-status">{item.status}</span>
-                                        </div>
-
-                                        <div className="tab-order-pricing">
-                                            <div className="tab-order-price-row">
-                                                <span className="tab-order-qty">{item.quantity}x</span>
-                                                <strong className="tab-order-price">
-                                                    {currency.format((item.unitPriceInCents * item.quantity) / 100)}
-                                                </strong>
-                                            </div>
-                                            {item.quantity > 1 && (
-                                                <span className="tab-order-unit-price">
-                                                    {currency.format(item.unitPriceInCents / 100)} cada
-                                                </span>
-                                            )}
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-
-                            {/* Subtotais e Total Real */}
-                            <div className="tab-orders-summary">
-                                <div className="tab-summary-row">
-                                    <span>Subtotal</span>
-                                    <strong>{currency.format(subtotalInCents / 100)}</strong>
-                                </div>
-                                <div className="tab-summary-row">
-                                    <span>Taxa de Serviço (10% - opcional)</span>
-                                    <strong>{currency.format(serviceFeeInCents / 100)}</strong>
-                                </div>
-                                <div className="tab-summary-row total">
-                                    <span>Total</span>
-                                    <strong className="tab-grand-total">{currency.format(totalInCents / 100)}</strong>
-                                </div>
-                            </div>
-
-                            {/* Botão para solicitar a conta direto da comanda */}
-                            <div className="tab-orders-cta-block">
-                                <button
-                                    type="button"
-                                    className="tab-request-bill-btn"
-                                    onClick={() => setActiveAction('bill')}
-                                >
-                                    Solicitar a Conta
-                                </button>
-                            </div>
-                        </>
-                    )}
-                </section>
-            )}
-
-            {/* ESTADO 5: Conta Encerrada pelo Garçom */}
-            {isClosed && (
-                <div className="tab-closed-box">
-                    <div className="closed-icon">✓</div>
-                    <h2>Atendimento Encerrado</h2>
-                    <p>
-                        A conta desta mesa foi encerrada pela equipe. Agradecemos muito pela sua visita!
-                    </p>
+                    <h2 style={{ color: '#991b1b' }}>Falha ao conectar</h2>
+                    <p style={{ color: '#7f1d1d' }}>{errorMessage}</p>
                     <button
                         type="button"
                         className="tab-hero-primary-btn"
-                        onClick={handleResetTab}
-                        disabled={isGeneratingCode}
+                        onClick={refresh}
                     >
-                        {isGeneratingCode ? 'Iniciando…' : 'Abrir Nova Comanda'}
+                        Tentar Novamente
                     </button>
                 </div>
             )}
 
-            {/* Barra Inferior (Dock: Início, Chamar Garçom, Comanda) */}
+            {/* CONTEÚDO MUTUAMENTE EXCLUSIVO (sem piscar nem sobrepor cards) */}
+            {!isInitialLoading && !errorMessage && (
+                <>
+                    {/* ESTADO 1: Sem Sessão / Inicial -> Abrir Comanda */}
+                    {mode === 'initial' && (
+                        <div className="tab-hero-card">
+                            <div className="tab-hero-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <line x1="16" y1="13" x2="8" y2="13" />
+                                    <line x1="16" y1="17" x2="8" y2="17" />
+                                    <polyline points="10 9 9 9 8 9" />
+                                </svg>
+                            </div>
+                            <h2>Abra sua Comanda</h2>
+                            <p>
+                                Gere o número da comanda desta mesa para apresentar ao garçom. Ele lançará seus pedidos e você acompanhará tudo em tempo real.
+                            </p>
+                            <button
+                                type="button"
+                                className="tab-hero-primary-btn"
+                                onClick={handleGenerateCode}
+                                disabled={isGeneratingCode}
+                            >
+                                {isGeneratingCode ? (
+                                    'Gerando comanda…'
+                                ) : (
+                                    <>
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <line x1="12" y1="5" x2="12" y2="19" />
+                                            <line x1="5" y1="12" x2="19" y2="12" />
+                                        </svg>
+                                        <span>Gerar Comanda</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ESTADO 2: Sessão Pendente com Código Válido -> Apresentar ao Garçom */}
+                    {mode === 'pending_with_code' && (
+                        <div className="tab-code-highlight-card">
+                            <span className="tab-code-title">Informe este código ao garçom</span>
+                            <div className="tab-code-big-number">
+                                {confirmationCode?.code.slice(0, 3)}&nbsp;{confirmationCode?.code.slice(3)}
+                            </div>
+                            <div className="tab-code-timer-badge">
+                                <span>⏱️ Válido por:</span>
+                                <strong>{formatCountdown(codeRemaining)}</strong>
+                            </div>
+                            <p className="tab-code-instruction">
+                                O garçom inserirá este número no sistema para iniciar o atendimento e começar a registrar os pedidos da sua mesa.
+                            </p>
+                            <div className="tab-code-waiting-pulse">
+                                <span className="tab-pulse-dot" />
+                                <span>Aguardando o garçom confirmar e lançar os pedidos…</span>
+                            </div>
+                            <button
+                                type="button"
+                                className="tab-renew-code-btn"
+                                onClick={handleGenerateCode}
+                                disabled={isGeneratingCode}
+                            >
+                                {isGeneratingCode ? 'Gerando novo código…' : 'Gerar novo código'}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ESTADO 3: Sessão Pendente com Código Expirado -> Gerar Novo Código */}
+                    {mode === 'pending_no_code' && (
+                        <div className="tab-hero-card">
+                            <div className="tab-hero-icon" style={{ background: '#fef3c7', color: '#b45309' }}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="12" y1="8" x2="12" y2="12" />
+                                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                                </svg>
+                            </div>
+                            <h2>Código Expirado</h2>
+                            <p>
+                                O tempo de apresentação do código anterior expirou. Gere um novo código para informar ao garçom e abrir sua comanda.
+                            </p>
+                            <button
+                                type="button"
+                                className="tab-hero-primary-btn"
+                                onClick={handleGenerateCode}
+                                disabled={isGeneratingCode}
+                            >
+                                {isGeneratingCode ? 'Gerando novo código…' : 'Gerar Novo Código'}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ESTADO 4: Presença Confirmada (Sessão Active) -> Aguardando Garçom Vincular Comanda */}
+                    {mode === 'active_waiting_tab' && (
+                        <div className="tab-hero-card">
+                            <div className="tab-hero-icon" style={{ background: '#fef3c7', color: '#b45309' }}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <polyline points="12 6 12 12 16 14" />
+                                </svg>
+                            </div>
+                            <h2>Presença Confirmada!</h2>
+                            <p>
+                                O garçom já confirmou sua mesa no sistema. Ele está preparando sua comanda e logo começará a lançar os pedidos.
+                            </p>
+                            <div className="tab-code-waiting-pulse">
+                                <span className="tab-pulse-dot" />
+                                <span>Sincronizando com o atendimento…</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ESTADO 5: Comanda Pronta -> Acompanhamento dos Pedidos */}
+                    {mode === 'ready' && (
+                        <section className="tab-orders-section">
+                            <div className="tab-orders-section-heading">
+                                <h2>Pedidos da Mesa</h2>
+                                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="clock-icon">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+
+                            {!hasRealItems ? (
+                                <div className="tab-empty-orders-box">
+                                    <span className="empty-icon">🍽️</span>
+                                    <h3>Comanda conectada!</h3>
+                                    <p>
+                                        Nenhum pedido lançado ainda. Assim que o garçom registrar seus pedidos na tela dele, eles aparecerão aqui em tempo real.
+                                    </p>
+                                    <Link
+                                        to={`/${restaurantSlug}${tableQuery}`}
+                                        className="tab-hero-primary-btn"
+                                        style={{ maxWidth: '240px', minHeight: '44px', fontSize: '14px', textDecoration: 'none' }}
+                                    >
+                                        Ver Cardápio
+                                    </Link>
+                                </div>
+                            ) : (
+                                <>
+                                    <ul className="tab-orders-list">
+                                        {displayItems.map((item) => (
+                                            <li key={item.id} className="tab-order-item">
+                                                <div className="tab-order-avatar">
+                                                    {item.imageUrl ? (
+                                                        <img src={item.imageUrl} alt={item.name} loading="lazy" />
+                                                    ) : (
+                                                        <span className="tab-order-avatar-fallback">🍽️</span>
+                                                    )}
+                                                </div>
+
+                                                <div className="tab-order-details">
+                                                    <span className="tab-order-name">{item.name}</span>
+                                                    <span className="tab-order-status">{item.status}</span>
+                                                </div>
+
+                                                <div className="tab-order-pricing">
+                                                    <div className="tab-order-price-row">
+                                                        <span className="tab-order-qty">{item.quantity}x</span>
+                                                        <strong className="tab-order-price">
+                                                            {currency.format((item.unitPriceInCents * item.quantity) / 100)}
+                                                        </strong>
+                                                    </div>
+                                                    {item.quantity > 1 && (
+                                                        <span className="tab-order-unit-price">
+                                                            {currency.format(item.unitPriceInCents / 100)} cada
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+
+                                    <div className="tab-orders-summary">
+                                        <div className="tab-summary-row">
+                                            <span>Subtotal</span>
+                                            <strong>{currency.format(subtotalInCents / 100)}</strong>
+                                        </div>
+                                        <div className="tab-summary-row">
+                                            <span>Taxa de Serviço (10% - opcional)</span>
+                                            <strong>{currency.format(serviceFeeInCents / 100)}</strong>
+                                        </div>
+                                        <div className="tab-summary-row total">
+                                            <span>Total</span>
+                                            <strong className="tab-grand-total">{currency.format(totalInCents / 100)}</strong>
+                                        </div>
+                                    </div>
+
+                                    <div className="tab-orders-cta-block">
+                                        <button
+                                            type="button"
+                                            className="tab-request-bill-btn"
+                                            onClick={() => setActiveAction('bill')}
+                                        >
+                                            Solicitar a Conta
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </section>
+                    )}
+
+                    {/* ESTADO 6: Conta Encerrada pelo Garçom */}
+                    {mode === 'closed' && (
+                        <div className="tab-closed-box">
+                            <div className="closed-icon">✓</div>
+                            <h2>Atendimento Encerrado</h2>
+                            <p>
+                                A conta desta mesa foi encerrada pela equipe. Agradecemos muito pela sua visita!
+                            </p>
+                            <button
+                                type="button"
+                                className="tab-hero-primary-btn"
+                                onClick={handleResetTab}
+                                disabled={isGeneratingCode}
+                            >
+                                {isGeneratingCode ? 'Iniciando…' : 'Abrir Nova Comanda'}
+                            </button>
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* Barra Inferior */}
             <nav className="home-bottom-nav" aria-label="Ações da mesa">
                 <Link to={`/${restaurantSlug}${tableQuery}`}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -467,7 +784,10 @@ export function TabOrdersPage() {
                     <span>Início</span>
                 </Link>
 
-                <button type="button" onClick={() => setActiveAction('waiter')}>
+                <button
+                    type="button"
+                    onClick={() => setActiveAction('waiter')}
+                >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                         <path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -486,7 +806,6 @@ export function TabOrdersPage() {
                 </Link>
             </nav>
 
-            {/* Popup Integrado de Chamar Garçom / Pedir Conta */}
             <ServiceActionPopup
                 isOpen={!!activeAction}
                 mode={activeAction}

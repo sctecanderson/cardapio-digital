@@ -242,6 +242,57 @@ export async function getWaiterRequestState(
     };
 }
 
+export interface CancelWaiterResult {
+    status: 'cancelled' | 'unlinked';
+    requestId: string;
+    remainingGuests: number;
+}
+
+export async function cancelWaiterRequest(
+    restaurantSlug: string,
+    tableNumber: number,
+): Promise<CancelWaiterResult> {
+    validateTableNumber(tableNumber);
+
+    const { data: authData, error: authError } =
+        await supabase.auth.getSession();
+
+    if (authError || !authData.session?.user.is_anonymous) {
+        throw new Error('Utilize uma sessão de cliente para cancelar o chamado.');
+    }
+
+    const { data, error } = await supabase.rpc('cancel_waiter_request', {
+        p_restaurant_slug: restaurantSlug,
+        p_table_number: tableNumber,
+    });
+
+    if (error) {
+        if (error.code === '42501' || error.code === '22023') {
+            throw new Error(error.message);
+        }
+
+        throw new Error('Não foi possível cancelar o chamado. Tente novamente.');
+    }
+
+    if (!isRecord(data)) {
+        throw new Error('O servidor não confirmou o cancelamento.');
+    }
+
+    if (
+        (data.status !== 'cancelled' && data.status !== 'unlinked') ||
+        typeof data.request_id !== 'string' ||
+        typeof data.remaining_guests !== 'number'
+    ) {
+        throw new Error('O servidor retornou uma confirmação de cancelamento inválida.');
+    }
+
+    return {
+        status: data.status,
+        requestId: data.request_id,
+        remainingGuests: data.remaining_guests,
+    };
+}
+
 export async function listPendingWaiterRequests(
     restaurantId: string,
 ): Promise<PendingWaiterRequest[]> {

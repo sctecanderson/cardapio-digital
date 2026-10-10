@@ -3528,16 +3528,22 @@ footer a {
 }
 
 .tab-code-highlight-card .tab-code-big-number {
-    font-size: 40px;
+    font-size: clamp(26px, 7.5vw, 38px);
     font-weight: 900;
-    letter-spacing: 8px;
+    letter-spacing: clamp(3px, 1.5vw, 7px);
     color: var(--brand, #b9472b);
     font-family: monospace;
     background: #fdf5f0;
-    padding: 8px 24px;
+    padding: 8px 16px;
     border-radius: 14px;
     border: 1px dashed #e8bbae;
     margin: 4px 0;
+    white-space: nowrap;
+    max-width: 100%;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .tab-code-highlight-card .tab-code-timer-badge {
@@ -3786,6 +3792,10 @@ footer a {
     border-bottom: 3px solid #16a34a;
 }
 
+.staff-table-btn.occupied.other {
+    border-bottom: 3px solid #d97706;
+}
+
 /* Card Principal de Gerenciamento da Mesa (Imagem 2) */
 .staff-manage-card {
     background: #ffffff;
@@ -3830,6 +3840,11 @@ footer a {
 .staff-manage-badge.free {
     background: #f4eee5;
     color: #7c6857;
+}
+
+.staff-manage-badge.other {
+    background: #fef3c7;
+    color: #92400e;
 }
 
 /* Seção: Confirmar Cliente */

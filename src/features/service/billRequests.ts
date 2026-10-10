@@ -126,3 +126,33 @@ export async function attendBillRequest(restaurantSlug: string, requestId: strin
   }
   return request;
 }
+
+export interface CancelBillResult {
+  status: 'cancelled';
+  requestId: string;
+  tableTabId: string;
+}
+
+export async function cancelBillRequest(restaurantSlug: string, tableTabId: string): Promise<CancelBillResult> {
+  const { data: authData, error: authError } = await supabase.auth.getSession();
+  if (authError || !authData.session?.user.is_anonymous) {
+    throw new Error('Utilize seu acesso de cliente para cancelar o pedido de conta.');
+  }
+
+  const { data, error } = await supabase.rpc('cancel_table_tab_bill', {
+    p_restaurant_slug: restaurantSlug,
+    p_table_tab_id: tableTabId,
+  });
+
+  if (error) throw operationError(error, 'Não foi possível cancelar o pedido de conta. Tente novamente.');
+  if (!isRecord(data)) throw new Error('O servidor não confirmou o cancelamento da conta.');
+  if (data.status !== 'cancelled' || typeof data.request_id !== 'string' || typeof data.table_tab_id !== 'string') {
+    throw new Error('O servidor retornou uma resposta inválida.');
+  }
+
+  return {
+    status: 'cancelled',
+    requestId: data.request_id,
+    tableTabId: data.table_tab_id,
+  };
+}
