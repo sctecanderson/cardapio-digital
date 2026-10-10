@@ -3678,3 +3678,594 @@ footer a {
     line-height: 1.5;
     max-width: 320px;
 }
+
+/* =========================================================
+   ESTILOS DE GERENCIAMENTO DE MESAS E COMANDAS (IMAGENS 1 E 2)
+   ========================================================= */
+
+.staff-salon-container {
+    margin-top: 10px;
+    padding-top: 14px;
+    border-top: 1px solid #ebdccb;
+}
+
+.staff-salon-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.staff-salon-title {
+    font-size: 12.5px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: #7c6857;
+    text-transform: uppercase;
+}
+
+.staff-salon-subtitle {
+    font-size: 11.5px;
+    color: #9b8a7c;
+}
+
+/* Barra de Pesquisa de Mesa */
+.staff-table-search-bar {
+    width: 100%;
+    min-height: 38px;
+    border-radius: 12px;
+    border: 1px solid #ded5c8;
+    background: #ffffff;
+    padding: 0 12px;
+    font-size: 13px;
+    color: var(--ink, #2b1d17);
+    margin-bottom: 10px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.staff-table-search-bar:focus {
+    border-color: var(--brand, #b9472b);
+}
+
+/* Carrossel de Mesas */
+.staff-tables-scroll-wrap {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: #8c827a #ede5da;
+}
+
+.staff-tables-scroll-wrap::-webkit-scrollbar {
+    height: 7px;
+}
+
+.staff-tables-scroll-wrap::-webkit-scrollbar-track {
+    background: #ede5da;
+    border-radius: 999px;
+}
+
+.staff-tables-scroll-wrap::-webkit-scrollbar-thumb {
+    background: #7a7068;
+    border-radius: 999px;
+}
+
+.staff-table-btn {
+    flex-shrink: 0;
+    min-width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    border: 1px solid #e0d6c8;
+    background: #f2ece2;
+    color: var(--ink, #2b1d17);
+    font-size: 14px;
+    font-weight: 800;
+    font-family: monospace;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.staff-table-btn:hover {
+    background: #e7dfd4;
+    border-color: #cfbeab;
+}
+
+.staff-table-btn.active {
+    background: var(--brand, #b9472b);
+    color: #ffffff;
+    border-color: var(--brand, #b9472b);
+    box-shadow: 0 3px 10px rgba(185, 71, 43, 0.28);
+}
+
+.staff-table-btn.occupied {
+    border-bottom: 3px solid #16a34a;
+}
+
+/* Card Principal de Gerenciamento da Mesa (Imagem 2) */
+.staff-manage-card {
+    background: #ffffff;
+    border-radius: 26px;
+    border: 1.5px solid #ece4d8;
+    padding: 24px 20px;
+    margin-top: 18px;
+    box-shadow: 0 6px 20px rgba(43, 29, 23, 0.04);
+}
+
+.staff-manage-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.staff-manage-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--ink, #2b1d17);
+    margin: 0 0 6px;
+}
+
+.staff-manage-time {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #6d5b4d;
+    font-family: monospace;
+}
+
+.staff-manage-badge {
+    display: inline-block;
+    background: #e2f4df;
+    color: #1e5922;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 999px;
+}
+
+.staff-manage-badge.free {
+    background: #f4eee5;
+    color: #7c6857;
+}
+
+/* Seção: Confirmar Cliente */
+.staff-sub-block {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid #f0eae0;
+}
+
+.staff-sub-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--ink, #2b1d17);
+    margin: 0 0 4px;
+}
+
+.staff-sub-desc {
+    font-size: 12.5px;
+    color: #8c7867;
+    margin: 0 0 12px;
+}
+
+.staff-confirm-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.staff-digit-row {
+    display: flex;
+    gap: 6px;
+}
+
+.staff-digit-box {
+    width: 36px;
+    height: 42px;
+    border-radius: 10px;
+    border: 1.5px solid #ded5c8;
+    background: #ffffff;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 800;
+    font-family: monospace;
+    color: var(--ink, #2b1d17);
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.staff-digit-box:focus {
+    border-color: var(--brand, #b9472b);
+}
+
+.staff-outline-action-btn {
+    min-height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1.5px solid #8c7867;
+    background: transparent;
+    color: #554437;
+    font-family: 'Lato', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.staff-outline-action-btn:hover {
+    background: #f7f2eb;
+    border-color: #554437;
+}
+
+.staff-outline-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Seção: Criar Comanda */
+.staff-create-tab-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.staff-create-tab-input {
+    flex: 1;
+    min-height: 44px;
+    border-radius: 12px;
+    border: 1px solid #ded5c8;
+    background: #ffffff;
+    padding: 0 14px;
+    font-size: 13.5px;
+    color: var(--ink, #2b1d17);
+    outline: none;
+}
+
+.staff-create-tab-input:focus {
+    border-color: var(--brand, #b9472b);
+}
+
+.staff-primary-action-btn {
+    min-height: 44px;
+    padding: 0 18px;
+    border-radius: 12px;
+    border: none;
+    background: var(--brand, #b9472b);
+    color: #ffffff;
+    font-family: 'Lato', sans-serif;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(185, 71, 43, 0.25);
+    transition: filter 0.15s ease;
+    white-space: nowrap;
+}
+
+.staff-primary-action-btn:hover {
+    filter: brightness(1.08);
+}
+
+.staff-primary-action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Card da Comanda Aberta Real (Imagem 2) */
+.staff-tab-block {
+    margin-top: 22px;
+}
+
+.staff-tab-heading {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--ink, #2b1d17);
+    margin: 0 0 12px;
+}
+
+.staff-tab-inner-card {
+    background: #fbf6ef;
+    border: 1.5px solid #ebdccb;
+    border-radius: 20px;
+    padding: 18px 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(43, 29, 23, 0.02);
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.staff-tab-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.staff-tab-header-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    margin-bottom: 14px;
+    gap: 10px;
+    transition: opacity 0.15s ease;
+}
+
+.staff-tab-header-btn:hover {
+    opacity: 0.9;
+}
+
+.staff-tab-header-btn.is-collapsed {
+    margin-bottom: 0;
+}
+
+.staff-tab-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.staff-tab-toggle-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #655446;
+    background: #f0e6d9;
+    border: 1px solid #ded5c8;
+    padding: 3px 8px;
+    border-radius: 8px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.staff-tab-header-btn:hover .staff-tab-toggle-indicator {
+    background: #e6dacb;
+    color: var(--ink, #2b1d17);
+}
+
+.staff-tab-label-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.staff-tab-label-name {
+    font-size: 15.5px;
+    font-weight: 800;
+    color: var(--ink, #2b1d17);
+}
+
+.staff-tab-open-pill {
+    background: #ffffff;
+    color: #4b3d32;
+    border: 1px solid #ded5c8;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.staff-tab-access-count {
+    font-size: 12px;
+    color: #7a6655;
+    font-weight: 600;
+}
+
+/* Registrar Consumo */
+.staff-tab-consume-box {
+    margin-bottom: 14px;
+}
+
+.staff-tab-consume-title {
+    font-size: 13.5px;
+    font-weight: 800;
+    color: var(--ink, #2b1d17);
+    margin: 0 0 8px;
+}
+
+.staff-product-select {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 12px;
+    border: 1px solid #ded5c8;
+    background: #ffffff;
+    padding: 0 12px;
+    font-size: 13.5px;
+    color: var(--ink, #2b1d17);
+    outline: none;
+    margin-bottom: 10px;
+    box-sizing: border-box;
+}
+
+.staff-qty-action-row {
+    display: flex;
+    gap: 10px;
+}
+
+.staff-qty-input {
+    width: 110px;
+    min-height: 42px;
+    border-radius: 12px;
+    border: 1px solid #ded5c8;
+    background: #ffffff;
+    padding: 0 12px;
+    font-size: 13.5px;
+    color: var(--ink, #2b1d17);
+    outline: none;
+    box-sizing: border-box;
+}
+
+/* Linha de Total */
+.staff-tab-total-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-top: 1px dashed #ded4c5;
+    border-bottom: 1px dashed #ded4c5;
+    margin: 14px 0;
+}
+
+.staff-tab-total-label {
+    font-size: 14.5px;
+    font-weight: 800;
+    color: var(--ink, #2b1d17);
+}
+
+.staff-tab-total-value {
+    font-size: 17px;
+    font-weight: 900;
+    color: var(--ink, #2b1d17);
+}
+
+/* Vincular Cliente */
+.staff-link-guest-box {
+    margin-bottom: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.staff-link-guest-label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #655446;
+    margin: 0 0 6px;
+}
+
+.staff-link-guest-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.staff-guest-select {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 40px;
+    border-radius: 12px;
+    border: 1px solid #ded5c8;
+    background: #ffffff;
+    padding: 0 10px;
+    font-size: 12.5px;
+    color: var(--ink, #2b1d17);
+    outline: none;
+    box-sizing: border-box;
+}
+
+.staff-link-guest-btn {
+    flex-shrink: 0;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1.5px solid #8c7867;
+    background: transparent;
+    color: #554437;
+    font-family: 'Lato', sans-serif;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.staff-link-guest-btn:hover {
+    background: #f7f2eb;
+    border-color: #554437;
+}
+
+.staff-link-guest-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+    .staff-link-guest-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .staff-guest-select {
+        width: 100%;
+    }
+
+    .staff-link-guest-btn {
+        width: 100%;
+    }
+}
+
+.staff-close-tab-link {
+    align-self: flex-end;
+    background: none;
+    border: none;
+    color: #991b1b;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-top: 8px;
+    display: block;
+    text-align: right;
+    width: 100%;
+}
+
+.staff-close-tab-link:hover {
+    color: #b91c1c;
+}
+
+/* Seção Acessos e Encerramento */
+.staff-closure-section {
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid #ebdccb;
+}
+
+.staff-access-pill {
+    display: inline-block;
+    background: #f5efe6;
+    color: #655446;
+    padding: 6px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 14px;
+}
+
+.staff-full-close-btn {
+    width: 100%;
+    min-height: 48px;
+    border-radius: 999px;
+    border: 1.5px solid #8c7867;
+    background: transparent;
+    color: #554437;
+    font-family: 'Lato', sans-serif;
+    font-size: 14.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.staff-full-close-btn:hover {
+    background: #fef2f2;
+    border-color: #b91c1c;
+    color: #b91c1c;
+}

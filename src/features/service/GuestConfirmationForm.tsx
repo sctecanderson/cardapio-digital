@@ -1,18 +1,20 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { confirmGuestSession } from './guestConfirmation';
 
 export function GuestConfirmationForm({
   restaurantSlug,
   tableNumber,
+  onConfirmed,
 }: {
   restaurantSlug: string;
   tableNumber: number;
+  onConfirmed?: () => void;
 }) {
-  const inputId = useId();
   const submitting = useRef(false);
+  const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
-  const [code, setCode] = useState('');
+  const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -46,11 +48,57 @@ export function GuestConfirmationForm({
     };
   }, [waitUntil]);
 
+  function handleDigitChange(index: number, val: string) {
+    const clean = val.replace(/[^0-9]/g, '');
+    const updated = [...digits];
+
+    if (!clean) {
+      updated[index] = '';
+      setDigits(updated);
+      return;
+    }
+
+    updated[index] = clean[clean.length - 1];
+    setDigits(updated);
+    setError('');
+    setConfirmed(false);
+
+    if (index < 5) {
+      inputsRef.current[index + 1]?.focus();
+    }
+  }
+
+  function handleKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+      inputsRef.current[index - 1]?.focus();
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6);
+    if (pasted) {
+      const updated = [...digits];
+      for (let i = 0; i < 6; i++) {
+        updated[i] = pasted[i] || '';
+      }
+      setDigits(updated);
+      setError('');
+      setConfirmed(false);
+      const nextIndex = Math.min(pasted.length, 5);
+      inputsRef.current[nextIndex]?.focus();
+    }
+  }
+
+  const code = digits.join('');
+  const isComplete = code.length === 6;
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (
       submitting.current ||
+      !isComplete ||
       (waitUntil !== null && waitUntil > Date.now())
     ) {
       return;
@@ -70,11 +118,11 @@ export function GuestConfirmationForm({
 
       if (result.status === 'confirmed') {
         setConfirmed(true);
-        setCode('');
+        setDigits(['', '', '', '', '', '']);
+        onConfirmed?.();
       } else if (result.status === 'invalid_code') {
         setError(
-          'Código incorreto, vencido ou já utilizado. ' +
-            'Confira o código no celular do cliente.',
+          'Código incorreto, vencido ou já utilizado. Confira o código no celular do cliente.',
         );
       } else {
         setRemaining(result.retry_after_seconds);
@@ -100,59 +148,52 @@ export function GuestConfirmationForm({
   const blocked = remaining > 0;
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mt-4 border-t border-black/10 pt-4"
-    >
-      <fieldset disabled={busy || blocked}>
-        <legend className="text-sm font-semibold">
-          Confirmar cliente
-        </legend>
+    <div className="staff-sub-block">
+      <h4 className="staff-sub-title">Confirmar Acesso</h4>
+      <p className="staff-sub-desc">
+        Digite o código de 6 dígitos gerado pelo cliente para vincular à mesa.
+      </p>
 
-        <p className="mt-1 text-xs opacity-75">
-          Digite o código exibido no celular do cliente.
-        </p>
+      <form onSubmit={handleSubmit}>
+        <fieldset disabled={busy || blocked}>
+          <div className="staff-confirm-row" onPaste={handlePaste}>
+            <div className="staff-digit-row">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { inputsRef.current[i] = el; }}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]"
+                  maxLength={1}
+                  autoComplete="off"
+                  disabled={busy || blocked}
+                  value={digits[i]}
+                  placeholder="0"
+                  onChange={(e) => handleDigitChange(i, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(i, e)}
+                  className="staff-digit-box"
+                />
+              ))}
+            </div>
 
-        <label
-          htmlFor={inputId}
-          className="mb-2 mt-4 block text-sm font-medium"
-        >
-          Código de seis dígitos
-        </label>
-
-        <input
-          id={inputId}
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          pattern="[0-9]{6}"
-          minLength={6}
-          maxLength={6}
-          required
-          placeholder="000000"
-          value={code}
-          onChange={(event) => {
-            setCode(event.target.value.replace(/[^0-9]/g, ''));
-            setError('');
-            setConfirmed(false);
-          }}
-          className="min-h-12 w-full rounded-xl border border-black/20 px-4 font-mono text-lg tracking-widest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-        />
-
-        <button
-          type="submit"
-          className="mt-3 min-h-12 w-full rounded-xl bg-[var(--brand)] px-4 text-sm font-medium text-white disabled:opacity-60"
-        >
-          {busy
-            ? 'Confirmando…'
-            : blocked
-              ? `Aguarde ${remaining}s`
-              : 'Confirmar cliente'}
-        </button>
-      </fieldset>
+            <button
+              type="submit"
+              disabled={busy || blocked || !isComplete}
+              className="staff-outline-action-btn flex-1 min-w-[150px]"
+            >
+              {busy
+                ? 'Confirmando…'
+                : blocked
+                  ? `Aguarde ${remaining}s`
+                  : 'Confirmar acesso'}
+            </button>
+          </div>
+        </fieldset>
+      </form>
 
       {error && (
-        <p role="alert" className="mt-3 text-sm text-red-700">
+        <p role="alert" className="mt-2 text-xs text-red-700 font-medium">
           {error}
         </p>
       )}
@@ -160,11 +201,11 @@ export function GuestConfirmationForm({
       {confirmed && (
         <p
           role="status"
-          className="mt-3 rounded-xl bg-green-50 p-3 text-sm text-green-900"
+          className="mt-2 text-xs text-green-800 font-medium bg-green-50 p-2.5 rounded-xl border border-green-200"
         >
-          Cliente confirmado nesta mesa.
+          Acesso confirmado com sucesso nesta mesa.
         </p>
       )}
-    </form>
+    </div>
   );
 }

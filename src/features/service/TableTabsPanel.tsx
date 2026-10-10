@@ -9,17 +9,16 @@ import {
 import type { TableTabsState } from './tableTabs';
 import { TabConsumptionPanel } from './TabConsumptionPanel';
 
-
 interface TableTabsPanelProps {
   restaurantSlug: string;
   restaurantId: string;
   tableVisitId: string;
+  onOpenTabsCountChange?: (count: number) => void;
 }
 
 const confirmationTime = new Intl.DateTimeFormat('pt-BR', {
   hour: '2-digit',
   minute: '2-digit',
-  second: '2-digit',
 });
 
 export function TableTabsPanel(props: TableTabsPanelProps) {
@@ -35,9 +34,9 @@ function TableTabsContent({
   restaurantSlug,
   restaurantId,
   tableVisitId,
+  onOpenTabsCountChange,
 }: TableTabsPanelProps) {
   const submitting = useRef(false);
-  const creationId = useRef<string | null>(null);
 
   const [state, setState] = useState<TableTabsState>({
     tabs: [],
@@ -46,10 +45,16 @@ function TableTabsContent({
   });
 
   const [label, setLabel] = useState('');
-  const [selectedGuests, setSelectedGuests] = useState<
-    Record<string, string>
-  >({});
+  const [selectedGuests, setSelectedGuests] = useState<Record<string, string>>({});
   const [closingTabId, setClosingTabId] = useState<string | null>(null);
+  const [collapsedTabs, setCollapsedTabs] = useState<Record<string, boolean>>({});
+
+  function toggleTabCollapse(tabId: string) {
+    setCollapsedTabs((prev) => ({
+      ...prev,
+      [tabId]: !prev[tabId],
+    }));
+  }
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -66,13 +71,12 @@ function TableTabsContent({
       setLoadError('');
 
       try {
-        const result = await getTableTabsState(
-          restaurantId,
-          tableVisitId,
-        );
+        const result = await getTableTabsState(restaurantId, tableVisitId);
 
         if (!disposed) {
           setState(result);
+          const openCount = result.tabs.filter((t) => t.status === 'open').length;
+          onOpenTabsCountChange?.(openCount);
         }
       } catch (cause) {
         if (!disposed) {
@@ -94,21 +98,23 @@ function TableTabsContent({
     return () => {
       disposed = true;
     };
-  }, [restaurantId, tableVisitId, refresh]);
+  }, [restaurantId, tableVisitId, refresh, onOpenTabsCountChange]);
 
   const disabled = busy || loading || !!loadError;
 
-  const linkedGuestIds = new Set(
-    state.links.map((link) => link.guest_session_id),
+  // Clientes ativos com confirmação de presença válida
+  const activeGuests = state.guests.filter(
+    (guest) => Date.parse(guest.expires_at) > Date.now(),
   );
 
-  // Esta filtragem melhora a apresentação.
-  // A validade é conferida novamente pelo banco ao vincular.
-  const availableGuests = state.guests.filter(
-    (guest) =>
-      !linkedGuestIds.has(guest.id) &&
-      Date.parse(guest.expires_at) > Date.now(),
-  );
+  // Mapeia em qual comanda cada cliente está atualmente
+  const guestTabMap = new Map<string, string>();
+  for (const link of state.links) {
+    const linkedTab = state.tabs.find((t) => t.id === link.table_tab_id);
+    if (linkedTab) {
+      guestTabMap.set(link.guest_session_id, linkedTab.label);
+    }
+  }
 
   async function perform(
     operation: () => Promise<unknown>,
@@ -151,16 +157,17 @@ function TableTabsContent({
       return;
     }
 
-    // Mantém o mesmo ID em uma repetição após falha.
-    const id = creationId.current ?? crypto.randomUUID();
-    creationId.current = id;
+    const id = crypto.randomUUID();
 
     await perform(
       () => createTableTab(restaurantSlug, tableVisitId, value, id),
       'Comanda criada.',
       () => {
         setLabel('');
-        creationId.current = null;
+        setCollapsedTabs((prev) => ({
+          ...prev,
+          [id]: false,
+        }));
       },
     );
   }
@@ -175,7 +182,7 @@ function TableTabsContent({
 
     await perform(
       () => linkGuestToTableTab(restaurantSlug, tableTabId, guestId),
-      'Cliente vinculado à comanda.',
+      'Cliente vinculado à comanda com sucesso.',
       () => {
         setSelectedGuests((current) => ({
           ...current,
@@ -188,95 +195,77 @@ function TableTabsContent({
   async function handleClose(tableTabId: string) {
     await perform(
       () => closeTableTab(restaurantSlug, tableTabId),
-      'Comanda encerrada. As demais continuam abertas.',
+      'Comanda encerrada com sucesso.',
       () => setClosingTabId(null),
     );
   }
 
   return (
-    <section
-      aria-labelledby={`tabs-title-${tableVisitId}`}
-      className="mt-5 border-t border-black/10 pt-5"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <h3
-          id={`tabs-title-${tableVisitId}`}
-          className="text-lg font-semibold"
-        >
-          Comandas
-        </h3>
+    <div className="staff-tab-block">
+      {/* Seção: Criar Comanda */}
+      <div className="staff-sub-block border-t-0 pt-0 mt-0">
+        <h4 className="staff-sub-title">Criar Comanda</h4>
+        <form onSubmit={handleCreate}>
+          <fieldset disabled={disabled}>
+            <label
+              htmlFor={`tab-label-${tableVisitId}`}
+              className="staff-sub-desc block mb-1"
+            >
+              Identificação da comanda
+            </label>
 
-        <button
-          type="button"
-          disabled={busy || loading}
-          onClick={() => setRefresh((current) => current + 1)}
-          className="min-h-11 px-3 text-sm font-medium text-[var(--brand)] disabled:opacity-50"
-        >
-          Atualizar
-        </button>
+            <div className="staff-create-tab-row">
+              <input
+                id={`tab-label-${tableVisitId}`}
+                type="text"
+                required
+                maxLength={80}
+                autoComplete="off"
+                value={label}
+                placeholder="Ex.: Casal, Amigos ou Comanda 01"
+                onChange={(event) => {
+                  setLabel(event.target.value);
+                  setActionError('');
+                  setNotice('');
+                }}
+                className="staff-create-tab-input"
+              />
+
+              <button
+                type="submit"
+                disabled={disabled}
+                className="staff-primary-action-btn"
+              >
+                {busy ? 'Criando…' : 'Criar comanda'}
+              </button>
+            </div>
+          </fieldset>
+        </form>
       </div>
 
-      <form onSubmit={handleCreate} className="mt-3">
-        <fieldset disabled={disabled} className="space-y-3">
-          <label
-            htmlFor={`tab-label-${tableVisitId}`}
-            className="block text-sm font-medium"
-          >
-            Identificação da nova comanda
-          </label>
-
-          <input
-            id={`tab-label-${tableVisitId}`}
-            type="text"
-            required
-            maxLength={80}
-            autoComplete="off"
-            value={label}
-            placeholder="Ex.: Anderson, Casal ou Comanda 01"
-            onChange={(event) => {
-              setLabel(event.target.value);
-              creationId.current = null;
-              setActionError('');
-              setNotice('');
-            }}
-            className="min-h-12 w-full rounded-xl border border-black/20 px-3"
-          />
-
-          <button
-            type="submit"
-            className="min-h-12 w-full rounded-xl bg-[var(--brand)] px-4 font-medium text-white disabled:opacity-50"
-          >
-            {busy ? 'Processando…' : 'Criar comanda'}
-          </button>
-        </fieldset>
-      </form>
-
       {actionError && (
-        <p role="alert" className="mt-3 text-sm text-red-700">
+        <p role="alert" className="mt-2 text-xs text-red-700">
           {actionError}
         </p>
       )}
 
       {notice && (
-        <p role="status" className="mt-3 text-sm text-green-800">
+        <p role="status" className="mt-2 text-xs text-green-800">
           {notice}
         </p>
       )}
 
+      {/* Seção: Comandas Abertas Reais */}
       {loading ? (
-        <p role="status" className="mt-4 text-sm opacity-75">
+        <p role="status" className="mt-3 text-xs opacity-75">
           Carregando comandas…
         </p>
       ) : loadError ? (
-        <p role="alert" className="mt-4 text-sm text-red-700">
+        <p role="alert" className="mt-3 text-xs text-red-700">
           {loadError}
         </p>
-      ) : state.tabs.length === 0 ? (
-        <p className="mt-4 text-sm opacity-75">
-          Nenhuma comanda criada neste atendimento.
-        </p>
-      ) : (
-        <ul className="mt-4 space-y-3">
+      ) : state.tabs.length > 0 && (
+        <div className="mt-5 space-y-4">
           {state.tabs.map((tab) => {
             const links = state.links.filter(
               (link) => link.table_tab_id === tab.id,
@@ -285,136 +274,166 @@ function TableTabsContent({
             const closed = tab.status === 'closed';
             const confirmingClose = closingTabId === tab.id;
 
+            // Clientes ativos que não estão já vinculados a ESTA comanda
+            const linkedSessionIdsThisTab = links.map((l) => l.guest_session_id);
+            const availableForThisTab = activeGuests.filter(
+              (g) => !linkedSessionIdsThisTab.includes(g.id),
+            );
+
+            const isCollapsed = Boolean(collapsedTabs[tab.id]);
+
             return (
-              <li
-                key={tab.id}
-                className="rounded-2xl border border-black/10 bg-[var(--page)] p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h4 className="break-words font-semibold">
-                    {tab.label}
-                  </h4>
+              <div key={tab.id} className="staff-tab-inner-card">
+                {/* Cabeçalho da comanda com alternador de encolher/expandir */}
+                <button
+                  type="button"
+                  onClick={() => toggleTabCollapse(tab.id)}
+                  aria-expanded={!isCollapsed}
+                  className={`staff-tab-header-btn ${isCollapsed ? 'is-collapsed' : ''}`}
+                >
+                  <div className="staff-tab-label-badge">
+                    <span className="staff-tab-label-name">
+                      Comanda {tab.label}
+                    </span>
+                    <span className="staff-tab-open-pill">
+                      {closed ? 'Encerrada' : 'Aberta'}
+                    </span>
+                  </div>
 
-                  <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-medium">
-                    {closed ? 'Encerrada' : 'Aberta'}
-                  </span>
-                </div>
+                  <div className="staff-tab-header-right">
+                    <span className="staff-tab-access-count">
+                      {links.length}{' '}
+                      {links.length === 1
+                        ? 'acesso vinculado'
+                        : 'acessos vinculados'}
+                    </span>
+                    <span
+                      className="staff-tab-toggle-indicator"
+                      title={isCollapsed ? 'Expandir comanda' : 'Encolher comanda'}
+                    >
+                      {isCollapsed ? 'Expandir ▼' : 'Encolher ▲'}
+                    </span>
+                  </div>
+                </button>
 
-                <p className="mt-2 text-sm opacity-75">
-                  {links.length}{' '}
-                  {links.length === 1
-                    ? 'acesso vinculado'
-                    : 'acessos vinculados'}
-                </p>
+                {/* Conteúdo expansível da comanda */}
+                <div className={isCollapsed ? 'hidden' : 'block'}>
+                  {/* Bloco de consumo da comanda */}
+                  <TabConsumptionPanel
+                    restaurantSlug={restaurantSlug}
+                    restaurantId={restaurantId}
+                    tab={tab}
+                  />
 
-                <TabConsumptionPanel
-                  restaurantSlug={restaurantSlug}
-                  restaurantId={restaurantId}
-                  tab={tab}
-                />
-
-                {!closed && (
-                  <>
-                    <div className="mt-4 space-y-2">
+                  {/* Bloco de vincular cliente e encerrar comanda */}
+                  {!closed && (
+                    <div className="staff-link-guest-box mt-4 border-t border-[#ebdccb] pt-3">
                       <label
                         htmlFor={`tab-guest-${tab.id}`}
-                        className="block text-sm font-medium"
+                        className="staff-link-guest-label block"
                       >
                         Vincular cliente confirmado
                       </label>
 
-                      <select
-                        id={`tab-guest-${tab.id}`}
-                        value={selectedGuests[tab.id] ?? ''}
-                        disabled={disabled || availableGuests.length === 0}
-                        onChange={(event) => {
-                          setSelectedGuests((current) => ({
-                            ...current,
-                            [tab.id]: event.target.value,
-                          }));
-                        }}
-                        className="min-h-12 w-full rounded-xl border border-black/20 bg-white px-3 disabled:opacity-50"
-                      >
-                        <option value="">
-                          {availableGuests.length === 0
-                            ? 'Nenhum cliente disponível'
-                            : 'Selecione um acesso confirmado'}
-                        </option>
-
-                        {availableGuests.map((guest, index) => (
-                          <option key={guest.id} value={guest.id}>
-                            Cliente {index + 1} — confirmado às{' '}
-                            {confirmationTime.format(
-                              new Date(guest.confirmed_at),
-                            )}
+                      <div className="staff-link-guest-row">
+                        <select
+                          id={`tab-guest-${tab.id}`}
+                          value={selectedGuests[tab.id] ?? ''}
+                          disabled={disabled || availableForThisTab.length === 0}
+                          onChange={(event) => {
+                            setSelectedGuests((current) => ({
+                              ...current,
+                              [tab.id]: event.target.value,
+                            }));
+                          }}
+                          className="staff-guest-select"
+                        >
+                          <option value="">
+                            {availableForThisTab.length === 0
+                              ? 'Nenhum outro cliente disponível'
+                              : 'Selecione um acesso confirmado'}
                           </option>
-                        ))}
-                      </select>
 
-                      <button
-                        type="button"
-                        disabled={
-                          disabled ||
-                          !selectedGuests[tab.id] ||
-                          !availableGuests.some(
-                            (guest) =>
-                              guest.id === selectedGuests[tab.id],
-                          )
-                        }
-                        onClick={() => void handleLink(tab.id)}
-                        className="min-h-11 w-full rounded-xl border border-black/15 bg-white px-3 text-sm font-medium disabled:opacity-50"
-                      >
-                        Vincular à comanda
-                      </button>
-                    </div>
+                          {availableForThisTab.map((guest, index) => {
+                            const otherTabName = guestTabMap.get(guest.id);
+                            return (
+                              <option key={guest.id} value={guest.id}>
+                                Cliente {index + 1}
+                                {otherTabName
+                                  ? ` (atualmente na Comanda ${otherTabName})`
+                                  : ` — confirmado às ${confirmationTime.format(
+                                      new Date(guest.confirmed_at),
+                                    )}`}
+                              </option>
+                            );
+                          })}
+                        </select>
 
-                    {confirmingClose ? (
-                      <div className="mt-4 rounded-xl bg-white p-3">
-                        <p className="text-sm">
-                          Encerrar a comanda “{tab.label}”?
-                        </p>
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => void handleClose(tab.id)}
-                            className="min-h-11 rounded-xl bg-[var(--brand)] px-4 text-sm font-medium text-white disabled:opacity-50"
-                          >
-                            Confirmar encerramento
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => setClosingTabId(null)}
-                            className="min-h-11 rounded-xl border border-black/15 px-4 text-sm"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          disabled={
+                            disabled ||
+                            !selectedGuests[tab.id] ||
+                            !availableForThisTab.some(
+                              (guest) =>
+                                guest.id === selectedGuests[tab.id],
+                            )
+                          }
+                          onClick={() => void handleLink(tab.id)}
+                          className="staff-link-guest-btn"
+                        >
+                          Confirmar acesso
+                        </button>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => {
-                          setClosingTabId(tab.id);
-                          setActionError('');
-                          setNotice('');
-                        }}
-                        className="mt-3 min-h-11 text-sm font-medium text-[var(--brand)] underline disabled:opacity-50"
-                      >
-                        Encerrar comanda
-                      </button>
-                    )}
-                  </>
-                )}
-              </li>
+
+                      {confirmingClose ? (
+                        <div className="mt-3 rounded-xl bg-white p-3 border border-amber-200">
+                          <p className="text-xs font-semibold text-amber-900">
+                            Encerrar a comanda “{tab.label}”?
+                          </p>
+
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => void handleClose(tab.id)}
+                              className="staff-primary-action-btn text-xs px-3 py-1.5"
+                            >
+                              Confirmar encerramento
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => setClosingTabId(null)}
+                              className="staff-outline-action-btn text-xs px-3 py-1.5"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => {
+                            setClosingTabId(tab.id);
+                            setActionError('');
+                            setNotice('');
+                          }}
+                          className="staff-close-tab-link"
+                        >
+                          Encerrar comanda
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             );
           })}
-        </ul>
+        </div>
       )}
-    </section>
+    </div>
   );
 }

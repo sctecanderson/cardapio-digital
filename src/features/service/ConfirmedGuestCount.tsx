@@ -114,9 +114,6 @@ export function ConfirmedGuestCount({
             void loadCount();
         }
 
-        // A passagem do tempo não gera um evento Realtime.
-        // Esta consulta periódica também remove acessos vencidos
-        // da contagem, enquanto a tela estiver visível.
         const timer = window.setInterval(() => {
             if (!document.hidden) {
                 void loadCount();
@@ -144,25 +141,24 @@ export function ConfirmedGuestCount({
     }, [restaurantId, tableVisitId]);
 
     return (
-        <div className="mt-3 rounded-xl bg-[var(--page)] px-3 py-3">
-            <p role="status" className="text-sm font-medium">
+        <div className="mb-3">
+            <span role="status" className="staff-access-pill">
                 {count === null
                     ? loading
                         ? 'Carregando acessos…'
                         : 'Contagem indisponível'
                     : `Acessos confirmados: ${count}`}
-            </p>
+            </span>
 
             {error && (
-                <p role="alert" className="mt-2 text-sm text-red-700">
+                <p role="alert" className="mt-1 text-xs text-red-700">
                     {error}
                 </p>
             )}
 
             {connectionIssue && (
-                <p className="mt-2 text-xs opacity-75">
-                    Atualização automática indisponível. A contagem
-                    pode estar desatualizada.
+                <p className="mt-1 text-xs opacity-75">
+                    Atualização automática indisponível.
                 </p>
             )}
 
@@ -171,7 +167,7 @@ export function ConfirmedGuestCount({
                     type="button"
                     onClick={() => reload.current()}
                     disabled={loading}
-                    className="mt-2 min-h-11 text-sm font-medium text-[var(--brand)] underline disabled:opacity-50"
+                    className="mt-1 text-xs font-medium text-[var(--brand)] underline disabled:opacity-50"
                 >
                     {loading ? 'Atualizando…' : 'Atualizar contagem'}
                 </button>

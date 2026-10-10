@@ -134,3 +134,29 @@ export async function countConfirmedGuestSessions(
 
     return count;
 }
+
+export interface RestaurantTableItem {
+    id: string;
+    table_number: number;
+    label?: string;
+    active: boolean;
+}
+
+export async function listRestaurantTables(
+    restaurantId: string,
+): Promise<RestaurantTableItem[]> {
+    const { data, error } = await supabase
+        .from('restaurant_tables')
+        .select('id, table_number, label, active')
+        .eq('restaurant_id', restaurantId)
+        .eq('active', true)
+        .order('table_number', { ascending: true });
+
+    if (error) {
+        throw new Error(
+            'Não foi possível carregar as mesas do restaurante. Tente novamente.',
+        );
+    }
+
+    return data ?? [];
+}

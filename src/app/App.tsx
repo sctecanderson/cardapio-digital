@@ -22,6 +22,8 @@ import { useTableContext } from "../features/tables/useTableContext";
 import { AccessPage } from "../features/auth/AccessPage";
 import { RequireStaffAccess } from "../features/auth/RequireStaffAccess";
 import { StaffServicePage } from "../features/service/StaffServicePage";
+import { StaffHistoryPage } from "../features/service/StaffHistoryPage";
+import { StaffProfilePage } from "../features/service/StaffProfilePage";
 const AdminCatalogPage = lazy(() =>
   import("../features/admin/AdminCatalogPage").then((m) => ({
     default: m.AdminCatalogPage,
@@ -152,6 +154,7 @@ function RestaurantLayout() {
         </Suspense>
       </div>
     );
+  const isEquipe = location.pathname.split("/")[2] === "equipe";
   return (
     <div className="restaurant public-site" style={theme}>
       <a href="#content" className="skip-link">
@@ -162,7 +165,7 @@ function RestaurantLayout() {
           <>
             <header className="public-header">
               <Link
-                to={`/${restaurant.slug}${tableQuery}`}
+                to={isEquipe ? `/${restaurant.slug}/equipe` : `/${restaurant.slug}${tableQuery}`}
                 aria-label={`${restaurant.name}, início`}
                 className="wordmark"
               >
@@ -179,25 +182,41 @@ function RestaurantLayout() {
                   </>
                 )}
               </Link>
-              <span className="badge public-table-badge">
-                {table.status === "unverified"
-                  ? `Mesa ${table.tableNumber}`
-                  : table.status === "invalid"
-                    ? "Mesa inválida"
-                    : "Consulta sem mesa"}
-              </span>
+              {!isEquipe && (
+                <span className="badge public-table-badge">
+                  {table.status === "unverified"
+                    ? `Mesa ${table.tableNumber}`
+                    : table.status === "invalid"
+                      ? "Mesa inválida"
+                      : "Consulta sem mesa"}
+                </span>
+              )}
             </header>
-            <nav className="tabs public-tabs" aria-label="Modo de visualização">
-              <NavLink end to={`/${restaurant.slug}${tableQuery}`}>
-                Home
-              </NavLink>
-              <NavLink to={`/${restaurant.slug}/cardapio${tableQuery}`}>
-                Cardápio
-              </NavLink>
-              <NavLink to={`/${restaurant.slug}/explorar${tableQuery}`}>
-                Explorar
-              </NavLink>
-            </nav>
+            {isEquipe ? (
+              <nav className="tabs public-tabs" aria-label="Navegação da equipe">
+                <NavLink end to={`/${restaurant.slug}/equipe`}>
+                  Atendimento
+                </NavLink>
+                <NavLink to={`/${restaurant.slug}/equipe/historico`}>
+                  Histórico
+                </NavLink>
+                <NavLink to={`/${restaurant.slug}/equipe/perfil`}>
+                  Perfil
+                </NavLink>
+              </nav>
+            ) : (
+              <nav className="tabs public-tabs" aria-label="Modo de visualização">
+                <NavLink end to={`/${restaurant.slug}${tableQuery}`}>
+                  Home
+                </NavLink>
+                <NavLink to={`/${restaurant.slug}/cardapio${tableQuery}`}>
+                  Cardápio
+                </NavLink>
+                <NavLink to={`/${restaurant.slug}/explorar${tableQuery}`}>
+                  Explorar
+                </NavLink>
+              </nav>
+            )}
           </>
         )}
         <main id="content" className={`public-main ${isProduct ? 'product-main' : ''}`}>
@@ -275,7 +294,9 @@ export function App() {
         </Route>
         <Route path="acesso" element={<Access />} />
         <Route element={<RequireStaffAccess />}>
-          <Route path="equipe/*" element={<StaffServicePage />} />
+          <Route path="equipe" element={<StaffServicePage />} />
+          <Route path="equipe/historico" element={<StaffHistoryPage />} />
+          <Route path="equipe/perfil" element={<StaffProfilePage />} />
         </Route>
 
         <Route element={<RequireStaffAccess requiredRole="admin" />}>
