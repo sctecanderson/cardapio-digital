@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useOutletContext } from 'react-router';
 import type { StaffAccess } from '../auth/staffAuth';
 import { supabase } from '../../lib/supabase';
@@ -18,6 +18,11 @@ interface TabDetail {
     status: 'open' | 'closed';
     created_at: string;
     closed_at: string | null;
+    subtotal_in_cents: number | null;
+    service_fee_percent: number | null;
+    service_fee_in_cents: number | null;
+    total_in_cents: number | null;
+    service_fee_accepted: boolean | null;
 }
 
 interface ItemDetail {
@@ -36,6 +41,8 @@ interface VisitConsumptionDetails {
     totalInCents: number;
 }
 
+const PAGE_SIZE = 20;
+
 const dateTimeFormat = new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
     month: '2-digit',
@@ -48,12 +55,52 @@ const currency = new Intl.NumberFormat('pt-BR', {
     currency: 'BRL',
 });
 
-function toLocalDateString(dateInput: Date | string): string {
-    const d = new Date(dateInput);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+function toTimezoneDateString(dateInput: Date | string, timeZone: string): string {
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(d);
+    const year = parts.find((p) => p.type === 'year')?.value;
+    const month = parts.find((p) => p.type === 'month')?.value;
+    const day = parts.find((p) => p.type === 'day')?.value;
     return `${year}-${month}-${day}`;
+}
+
+export function getTimezoneUtcRange(dateStr: string, timeZone: string): { startUtc: string; nextDayStartUtc: string } {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+        hour12: false,
+    });
+
+    const testDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+    const parts = formatter.formatToParts(testDate);
+    const tzYear = Number(parts.find((p) => p.type === 'year')?.value);
+    const tzMonth = Number(parts.find((p) => p.type === 'month')?.value);
+    const tzDay = Number(parts.find((p) => p.type === 'day')?.value);
+    let tzHour = Number(parts.find((p) => p.type === 'hour')?.value);
+    if (tzHour === 24) tzHour = 0;
+    const tzMin = Number(parts.find((p) => p.type === 'minute')?.value);
+
+    const tzTimeAsUtc = Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMin, 0);
+    const offsetMs = tzTimeAsUtc - testDate.getTime();
+
+    const startUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0) - offsetMs;
+    const nextDayUtcMs = startUtcMs + 24 * 60 * 60 * 1000;
+
+    return {
+        startUtc: new Date(startUtcMs).toISOString(),
+        nextDayStartUtc: new Date(nextDayUtcMs).toISOString(),
+    };
 }
 
 const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -65,11 +112,10 @@ interface WeekDayOption {
     isToday: boolean;
 }
 
-function getWeekDaysAround(centerDate: Date): WeekDayOption[] {
-    const todayStr = toLocalDateString(new Date());
+function getWeekDaysAround(centerDate: Date, timeZone: string): WeekDayOption[] {
+    const todayStr = toTimezoneDateString(new Date(), timeZone);
     const days: WeekDayOption[] = [];
 
-    // Começa na segunda-feira da semana
     const currentDay = centerDate.getDay();
     const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
 
@@ -80,7 +126,7 @@ function getWeekDaysAround(centerDate: Date): WeekDayOption[] {
         const d = new Date(monday);
         d.setDate(monday.getDate() + i);
 
-        const iso = toLocalDateString(d);
+        const iso = toTimezoneDateString(d, timeZone);
         days.push({
             isoDate: iso,
             dayName: dayNames[d.getDay()],
@@ -95,9 +141,13 @@ function getWeekDaysAround(centerDate: Date): WeekDayOption[] {
 export function StaffHistoryPage() {
     const access = useOutletContext<StaffAccess>();
 
+    const [timezone, setTimezone] = useState<string>('America/Sao_Paulo');
     const [visits, setVisits] = useState<ClosedVisit[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState('');
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
 
     // Filtro por data
     const [selectedDate, setSelectedDate] = useState<string>('');
@@ -107,21 +157,50 @@ export function StaffHistoryPage() {
     const [detailsMap, setDetailsMap] = useState<Record<string, VisitConsumptionDetails>>({});
     const [loadingDetails, setLoadingDetails] = useState<Record<string, boolean>>({});
 
-    // Dias da semana atual para a barra de filtros
-    const weekDays = useMemo(() => {
-        const base = selectedDate ? new Date(selectedDate + 'T12:00:00') : new Date();
-        return getWeekDaysAround(base);
-    }, [selectedDate]);
-
+    // Carrega o fuso horário configurado do restaurante
     useEffect(() => {
         let disposed = false;
+        async function fetchRestaurantConfig() {
+            try {
+                const { data } = await supabase
+                    .from('restaurants')
+                    .select('timezone')
+                    .eq('id', access.restaurantId)
+                    .maybeSingle();
 
-        async function loadHistory() {
-            setLoading(true);
+                if (!disposed && data?.timezone) {
+                    setTimezone(data.timezone);
+                }
+            } catch {
+                // Mantém o padrão America/Sao_Paulo
+            }
+        }
+        void fetchRestaurantConfig();
+        return () => {
+            disposed = true;
+        };
+    }, [access.restaurantId]);
+
+    // Dias da semana atual para a barra de filtros
+    const weekDays = useMemo(() => {
+        const base = selectedDate ? new Date(selectedDate + 'T12:00:00Z') : new Date();
+        return getWeekDaysAround(base, timezone);
+    }, [selectedDate, timezone]);
+
+    const fetchVisits = useCallback(
+        async (targetPage: number, dateFilter: string, append: boolean) => {
+            if (append) {
+                setLoadingMore(true);
+            } else {
+                setLoading(true);
+            }
             setError('');
 
             try {
-                const { data, error: qErr } = await supabase
+                const from = targetPage * PAGE_SIZE;
+                const to = from + PAGE_SIZE; // busca 1 a mais para detectar hasMore
+
+                let query = supabase
                     .from('table_visits')
                     .select(`
                         id,
@@ -133,35 +212,54 @@ export function StaffHistoryPage() {
                     .eq('assigned_member_id', access.memberId)
                     .eq('status', 'closed')
                     .order('closed_at', { ascending: false })
-                    .limit(50)
-                    .overrideTypes<ClosedVisit[], { merge: false }>();
+                    .order('id', { ascending: false })
+                    .range(from, to);
+
+                if (dateFilter) {
+                    const { startUtc, nextDayStartUtc } = getTimezoneUtcRange(dateFilter, timezone);
+                    query = query.gte('closed_at', startUtc).lt('closed_at', nextDayStartUtc);
+                }
+
+                const { data, error: qErr } = await query.overrideTypes<ClosedVisit[], { merge: false }>();
 
                 if (qErr) throw qErr;
 
-                if (!disposed) {
-                    setVisits(data ?? []);
+                const results = data ?? [];
+                const moreAvailable = results.length > PAGE_SIZE;
+                const pageResults = results.slice(0, PAGE_SIZE);
+
+                setHasMore(moreAvailable);
+                if (append) {
+                    setVisits((prev) => [...prev, ...pageResults]);
+                } else {
+                    setVisits(pageResults);
                 }
             } catch (cause) {
-                if (!disposed) {
-                    setError(
-                        cause instanceof Error
-                            ? cause.message
-                            : 'Não foi possível carregar o histórico de atendimentos.',
-                    );
-                }
+                setError(
+                    cause instanceof Error
+                        ? cause.message
+                        : 'Não foi possível carregar o histórico de atendimentos.',
+                );
             } finally {
-                if (!disposed) {
-                    setLoading(false);
-                }
+                setLoading(false);
+                setLoadingMore(false);
             }
-        }
+        },
+        [access.restaurantId, access.memberId, timezone],
+    );
 
-        void loadHistory();
+    // Carrega quando a data ou restaurante muda
+    useEffect(() => {
+        setPage(0);
+        void fetchVisits(0, selectedDate, false);
+    }, [selectedDate, fetchVisits]);
 
-        return () => {
-            disposed = true;
-        };
-    }, [access.restaurantId, access.memberId]);
+    function handleLoadMore() {
+        if (loadingMore || !hasMore) return;
+        const nextPage = page + 1;
+        setPage(nextPage);
+        void fetchVisits(nextPage, selectedDate, true);
+    }
 
     // Carrega detalhes de consumo e comandas de um atendimento ao clicar
     async function toggleVisitDetails(visitId: string) {
@@ -180,7 +278,7 @@ export function StaffHistoryPage() {
             const [tabsRes, itemsRes] = await Promise.all([
                 supabase
                     .from('table_tabs')
-                    .select('id, label, status, created_at, closed_at')
+                    .select('id, label, status, created_at, closed_at, subtotal_in_cents, service_fee_percent, service_fee_in_cents, total_in_cents, service_fee_accepted')
                     .eq('table_visit_id', visitId)
                     .order('created_at', { ascending: true })
                     .overrideTypes<TabDetail[], { merge: false }>(),
@@ -196,9 +294,18 @@ export function StaffHistoryPage() {
             const tabs = tabsRes.data ?? [];
             const items = itemsRes.data ?? [];
 
-            const totalInCents = items
-                .filter((item) => item.status === 'active')
-                .reduce((acc, curr) => acc + curr.line_total_in_cents, 0);
+            // Calcula o total geral da mesa respeitando os snapshots persistidos
+            let totalInCents = 0;
+            for (const tab of tabs) {
+                if (tab.total_in_cents !== null && tab.total_in_cents !== undefined) {
+                    totalInCents += tab.total_in_cents;
+                } else {
+                    const tabSubtotal = items
+                        .filter((item) => item.table_tab_id === tab.id && item.status === 'active')
+                        .reduce((acc, curr) => acc + curr.line_total_in_cents, 0);
+                    totalInCents += tabSubtotal;
+                }
+            }
 
             setDetailsMap((prev) => ({
                 ...prev,
@@ -215,27 +322,19 @@ export function StaffHistoryPage() {
         }
     }
 
-    // Filtra visitas pela data selecionada
-    const filteredVisits = useMemo(() => {
-        if (!selectedDate) return visits;
-        return visits.filter((v) => {
-            const visitDay = toLocalDateString(v.closed_at || v.opened_at);
-            return visitDay === selectedDate;
-        });
-    }, [visits, selectedDate]);
-
     // Formata o título da data selecionada
     const selectedDateDisplay = useMemo(() => {
         if (!selectedDate) return null;
         const [year, month, day] = selectedDate.split('-').map(Number);
-        const dateObj = new Date(year, month - 1, day);
+        const dateObj = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
         return new Intl.DateTimeFormat('pt-BR', {
+            timeZone: timezone,
             weekday: 'long',
             day: '2-digit',
             month: 'long',
             year: 'numeric',
         }).format(dateObj);
-    }, [selectedDate]);
+    }, [selectedDate, timezone]);
 
     return (
         <section className="mx-auto max-w-xl pb-12">
@@ -301,7 +400,7 @@ export function StaffHistoryPage() {
                         </strong>
                     </div>
                     <span className="text-[#8c7867] font-medium">
-                        {filteredVisits.length} atendimento{filteredVisits.length !== 1 ? 's' : ''}
+                        {visits.length} atendimento{visits.length !== 1 ? 's' : ''}
                     </span>
                 </div>
             )}
@@ -314,7 +413,7 @@ export function StaffHistoryPage() {
                 <p role="alert" className="p-4 rounded-xl bg-red-50 text-xs text-red-700">
                     {error}
                 </p>
-            ) : filteredVisits.length === 0 ? (
+            ) : visits.length === 0 ? (
                 <div className="rounded-2xl border border-[#ece4d8] bg-white p-8 text-center">
                     <p className="text-sm font-semibold text-[#7a6655]">
                         Nenhum atendimento encontrado {selectedDateDisplay ? `em ${selectedDateDisplay}` : 'recentemente'}.
@@ -330,153 +429,208 @@ export function StaffHistoryPage() {
                     )}
                 </div>
             ) : (
-                <ul className="space-y-3">
-                    {filteredVisits.map((visit) => {
-                        const isExpanded = expandedVisitId === visit.id;
-                        const details = detailsMap[visit.id];
-                        const isLoadingDet = loadingDetails[visit.id];
+                <div className="space-y-3">
+                    <ul className="space-y-3">
+                        {visits.map((visit) => {
+                            const isExpanded = expandedVisitId === visit.id;
+                            const details = detailsMap[visit.id];
+                            const isLoadingDet = loadingDetails[visit.id];
 
-                        return (
-                            <li
-                                key={visit.id}
-                                className="rounded-2xl border border-[#ebdccb] bg-white shadow-sm overflow-hidden transition-all"
-                            >
-                                {/* Cabeçalho clicável do Card */}
-                                <button
-                                    type="button"
-                                    onClick={() => void toggleVisitDetails(visit.id)}
-                                    className="w-full text-left p-4 hover:bg-[#fffdfa] transition-colors focus:outline-none cursor-pointer"
+                            return (
+                                <li
+                                    key={visit.id}
+                                    className="rounded-2xl border border-[#ebdccb] bg-white shadow-sm overflow-hidden transition-all"
                                 >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold text-base text-[var(--ink,#2b1d17)]">
-                                                Mesa {String(visit.table.table_number).padStart(2, '0')}
-                                            </span>
-                                            <span className="text-[11px] rounded-full bg-[#f4eee5] px-2 py-0.5 font-semibold text-[#655446]">
-                                                Encerrado
-                                            </span>
+                                    {/* Cabeçalho clicável do Card */}
+                                    <button
+                                        type="button"
+                                        onClick={() => void toggleVisitDetails(visit.id)}
+                                        className="w-full text-left p-4 hover:bg-[#fffdfa] transition-colors focus:outline-none cursor-pointer"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-base text-[var(--ink,#2b1d17)]">
+                                                    Mesa {String(visit.table.table_number).padStart(2, '0')}
+                                                </span>
+                                                <span className="text-[11px] rounded-full bg-[#f4eee5] px-2 py-0.5 font-semibold text-[#655446]">
+                                                    Encerrado
+                                                </span>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                {details && (
+                                                    <span className="font-bold text-sm text-[var(--brand,#b9472b)]">
+                                                        {currency.format(details.totalInCents / 100)}
+                                                    </span>
+                                                )}
+                                                <span className="text-xs text-[#8c7867]">
+                                                    {isExpanded ? '▲' : '▼'}
+                                                </span>
+                                            </div>
                                         </div>
 
-                                        <div className="flex items-center gap-2">
-                                            {details && (
-                                                <span className="font-bold text-sm text-[var(--brand,#b9472b)]">
-                                                    {currency.format(details.totalInCents / 100)}
+                                        <div className="mt-2 text-xs text-[#8c7867] flex flex-wrap gap-x-4 gap-y-0.5">
+                                            <span>
+                                                Entrada: {dateTimeFormat.format(new Date(visit.opened_at))}
+                                            </span>
+                                            {visit.closed_at && (
+                                                <span>
+                                                    Saída: {dateTimeFormat.format(new Date(visit.closed_at))}
                                                 </span>
                                             )}
-                                            <span className="text-xs text-[#8c7867]">
-                                                {isExpanded ? '▲' : '▼'}
-                                            </span>
                                         </div>
-                                    </div>
+                                    </button>
 
-                                    <div className="mt-2 text-xs text-[#8c7867] flex flex-wrap gap-x-4 gap-y-0.5">
-                                        <span>
-                                            Entrada: {dateTimeFormat.format(new Date(visit.opened_at))}
-                                        </span>
-                                        {visit.closed_at && (
-                                            <span>
-                                                Saída: {dateTimeFormat.format(new Date(visit.closed_at))}
-                                            </span>
-                                        )}
-                                    </div>
-                                </button>
+                                    {/* Conteúdo Expandido: Comandas e Itens Vendidos */}
+                                    {isExpanded && (
+                                        <div className="border-t border-[#f0eae0] bg-[#faf6f0] p-4">
+                                            {isLoadingDet ? (
+                                                <p className="text-xs text-[#8c7867] italic py-2">
+                                                    Carregando comandas e consumo…
+                                                </p>
+                                            ) : !details || details.tabs.length === 0 ? (
+                                                <p className="text-xs text-[#8c7867] italic py-2">
+                                                    Nenhuma comanda registrada neste atendimento.
+                                                </p>
+                                            ) : (
+                                                <div className="space-y-4">
+                                                    {details.tabs.map((tab) => {
+                                                        const tabItems = details.items.filter(
+                                                            (item) => item.table_tab_id === tab.id,
+                                                        );
 
-                                {/* Conteúdo Expandido: Comandas e Itens Vendidos */}
-                                {isExpanded && (
-                                    <div className="border-t border-[#f0eae0] bg-[#faf6f0] p-4">
-                                        {isLoadingDet ? (
-                                            <p className="text-xs text-[#8c7867] italic py-2">
-                                                Carregando comandas e consumo…
-                                            </p>
-                                        ) : !details || details.tabs.length === 0 ? (
-                                            <p className="text-xs text-[#8c7867] italic py-2">
-                                                Nenhuma comanda registrada neste atendimento.
-                                            </p>
-                                        ) : (
-                                            <div className="space-y-4">
-                                                {details.tabs.map((tab) => {
-                                                    const tabItems = details.items.filter(
-                                                        (item) => item.table_tab_id === tab.id,
-                                                    );
-                                                    const tabSubtotal = tabItems
-                                                        .filter((i) => i.status === 'active')
-                                                        .reduce((acc, curr) => acc + curr.line_total_in_cents, 0);
+                                                        const hasSnapshot = tab.subtotal_in_cents !== null && tab.subtotal_in_cents !== undefined;
+                                                        const calculatedItemsSubtotal = tabItems
+                                                            .filter((i) => i.status === 'active')
+                                                            .reduce((acc, curr) => acc + curr.line_total_in_cents, 0);
 
-                                                    return (
-                                                        <div
-                                                            key={tab.id}
-                                                            className="rounded-xl border border-[#ebdccb] bg-white p-3.5 shadow-xs"
-                                                        >
-                                                            {/* Título da Comanda */}
-                                                            <div className="flex items-center justify-between pb-2 border-b border-[#f4ede3]">
-                                                                <h4 className="font-bold text-sm text-[var(--ink,#2b1d17)]">
-                                                                    Comanda {tab.label}
-                                                                </h4>
-                                                                <span className="text-[11px] font-semibold text-[#7a6655]">
-                                                                    {tabItems.filter(i => i.status === 'active').length} itens
-                                                                </span>
-                                                            </div>
+                                                        const tabSubtotal = hasSnapshot
+                                                            ? tab.subtotal_in_cents!
+                                                            : calculatedItemsSubtotal;
 
-                                                            {/* Lista de Produtos Vendidos */}
-                                                            {tabItems.length === 0 ? (
-                                                                <p className="text-xs text-[#8c7867] italic py-2">
-                                                                    Nenhum consumo registrado.
-                                                                </p>
-                                                            ) : (
-                                                                <ul className="mt-2 divide-y divide-[#f7f2ea]">
-                                                                    {tabItems.map((item) => (
-                                                                        <li
-                                                                            key={item.id}
-                                                                            className="py-1.5 flex items-center justify-between text-xs"
-                                                                        >
-                                                                            <div>
-                                                                                <span className="font-medium text-[#2b1d17]">
-                                                                                    {item.quantity}× {item.product_name}
-                                                                                </span>
-                                                                                {item.status === 'cancelled' && (
-                                                                                    <span className="ml-2 text-[10px] text-amber-800 font-semibold bg-amber-100 px-1.5 py-0.5 rounded">
-                                                                                        Cancelado
+                                                        const tabFeeInCents = hasSnapshot
+                                                            ? (tab.service_fee_in_cents ?? 0)
+                                                            : 0;
+
+                                                        const tabTotalInCents = hasSnapshot
+                                                            ? (tab.total_in_cents ?? tabSubtotal)
+                                                            : tabSubtotal;
+
+                                                        return (
+                                                            <div
+                                                                key={tab.id}
+                                                                className="rounded-xl border border-[#ebdccb] bg-white p-3.5 shadow-xs"
+                                                            >
+                                                                {/* Título da Comanda */}
+                                                                <div className="flex items-center justify-between pb-2 border-b border-[#f4ede3]">
+                                                                    <h4 className="font-bold text-sm text-[var(--ink,#2b1d17)]">
+                                                                        Comanda {tab.label}
+                                                                    </h4>
+                                                                    <span className="text-[11px] font-semibold text-[#7a6655]">
+                                                                        {tabItems.filter(i => i.status === 'active').length} itens
+                                                                    </span>
+                                                                </div>
+
+                                                                {/* Lista de Produtos Vendidos */}
+                                                                {tabItems.length === 0 ? (
+                                                                    <p className="text-xs text-[#8c7867] italic py-2">
+                                                                        Nenhum consumo registrado.
+                                                                    </p>
+                                                                ) : (
+                                                                    <ul className="mt-2 divide-y divide-[#f7f2ea]">
+                                                                        {tabItems.map((item) => (
+                                                                            <li
+                                                                                key={item.id}
+                                                                                className="py-1.5 flex items-center justify-between text-xs"
+                                                                            >
+                                                                                <div>
+                                                                                    <span className="font-medium text-[#2b1d17]">
+                                                                                        {item.quantity}× {item.product_name}
                                                                                     </span>
-                                                                                )}
-                                                                            </div>
-                                                                            <span className={`font-semibold ${item.status === 'cancelled' ? 'line-through text-gray-400' : 'text-[#2b1d17]'}`}>
-                                                                                {currency.format(item.line_total_in_cents / 100)}
+                                                                                    {item.status === 'cancelled' && (
+                                                                                        <span className="ml-2 text-[10px] text-amber-800 font-semibold bg-amber-100 px-1.5 py-0.5 rounded">
+                                                                                            Cancelado
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <span className={`font-semibold ${item.status === 'cancelled' ? 'line-through text-gray-400' : 'text-[#2b1d17]'}`}>
+                                                                                    {currency.format(item.line_total_in_cents / 100)}
+                                                                                </span>
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                )}
+
+                                                                {/* Resumo Financeiro da Comanda */}
+                                                                <div className="mt-2.5 pt-2 border-t border-[#f4ede3] space-y-1 text-xs">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-[#7a6655]">
+                                                                            Subtotal dos itens
+                                                                        </span>
+                                                                        <span className="font-semibold text-[#2b1d17]">
+                                                                            {currency.format(tabSubtotal / 100)}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {hasSnapshot && tab.service_fee_percent !== null && Number(tab.service_fee_percent) > 0 && (
+                                                                        <div className="flex items-center justify-between text-xs">
+                                                                            <span className="text-[#7a6655] flex items-center gap-1.5">
+                                                                                <span>Taxa de serviço ({tab.service_fee_percent}%)</span>
+                                                                                <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${tab.service_fee_accepted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                                                                                    {tab.service_fee_accepted ? 'Aceita' : 'Dispensada'}
+                                                                                </span>
                                                                             </span>
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            )}
+                                                                            <span className={`font-semibold ${tab.service_fee_accepted ? 'text-[#2b1d17]' : 'text-gray-400'}`}>
+                                                                                {currency.format(tabFeeInCents / 100)}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
 
-                                                            {/* Subtotal da Comanda */}
-                                                            <div className="mt-2.5 pt-2 border-t border-[#f4ede3] flex items-center justify-between text-xs">
-                                                                <span className="font-semibold text-[#7a6655]">
-                                                                    Subtotal da comanda
-                                                                </span>
-                                                                <strong className="font-bold text-sm text-[var(--ink,#2b1d17)]">
-                                                                    {currency.format(tabSubtotal / 100)}
-                                                                </strong>
+                                                                    <div className="pt-1 flex items-center justify-between border-t border-[#f4ede3]">
+                                                                        <span className="font-bold text-[#7a6655]">
+                                                                            Total da comanda
+                                                                        </span>
+                                                                        <strong className="font-bold text-sm text-[var(--ink,#2b1d17)]">
+                                                                            {currency.format(tabTotalInCents / 100)}
+                                                                        </strong>
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        );
+                                                    })}
 
-                                                {/* Total Geral da Mesa */}
-                                                <div className="rounded-xl bg-white border border-[#ded5c8] p-3 flex items-center justify-between">
-                                                    <span className="font-bold text-sm text-[var(--ink,#2b1d17)]">
-                                                        Total Geral da Mesa
-                                                    </span>
-                                                    <strong className="font-extrabold text-base text-[var(--brand,#b9472b)]">
-                                                        {currency.format(details.totalInCents / 100)}
-                                                    </strong>
+                                                    {/* Total Geral da Mesa */}
+                                                    <div className="rounded-xl bg-white border border-[#ded5c8] p-3 flex items-center justify-between">
+                                                        <span className="font-bold text-sm text-[var(--ink,#2b1d17)]">
+                                                            Total Geral da Mesa
+                                                        </span>
+                                                        <strong className="font-extrabold text-base text-[var(--brand,#b9472b)]">
+                                                            {currency.format(details.totalInCents / 100)}
+                                                        </strong>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </li>
-                        );
-                    })}
-                </ul>
+                                            )}
+                                        </div>
+                                    )}
+                                </li>
+                            );
+                        })}
+                    </ul>
+
+                    {/* Botão de Paginação / Carregar Mais */}
+                    {hasMore && (
+                        <div className="pt-2 text-center">
+                            <button
+                                type="button"
+                                disabled={loadingMore}
+                                onClick={handleLoadMore}
+                                className="w-full py-3 rounded-xl border border-[#ebdccb] bg-white font-bold text-xs text-[var(--ink,#2b1d17)] hover:bg-[#fffdfa] transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                            >
+                                {loadingMore ? 'Carregando mais atendimentos…' : 'Carregar mais atendimentos'}
+                            </button>
+                        </div>
+                    )}
+                </div>
             )}
         </section>
     );

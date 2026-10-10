@@ -5,6 +5,7 @@ export interface BillRequest extends ServiceRequest {
   table_tab_id: string;
   table_visit_id: string;
   request_type: 'bill';
+  include_service_fee: boolean | null;
 }
 
 export interface PendingBillRequest extends BillRequest {
@@ -39,12 +40,14 @@ function parseBillRequest(value: unknown): BillRequest {
     || !isNullableString(value.resolved_by_member_id)) {
     throw new Error('O servidor retornou uma solicitação de conta inválida.');
   }
+  const include_service_fee = typeof value.include_service_fee === 'boolean' ? value.include_service_fee : null;
   return {
     id: value.id, restaurant_id: value.restaurant_id,
     restaurant_table_id: value.restaurant_table_id, table_visit_id: value.table_visit_id,
     table_tab_id: value.table_tab_id, request_type: 'bill', status: value.status,
     created_at: value.created_at, resolved_at: value.resolved_at,
     resolved_by_member_id: value.resolved_by_member_id,
+    include_service_fee,
   };
 }
 
@@ -55,7 +58,7 @@ function operationError(error: { code?: string; message: string }, fallback: str
 export async function getBillRequestState(tableTabId: string): Promise<BillRequest | null> {
   const { data, error } = await supabase
     .from('service_requests')
-    .select('id, restaurant_id, restaurant_table_id, table_visit_id, table_tab_id, request_type, status, created_at, resolved_at, resolved_by_member_id')
+    .select('id, restaurant_id, restaurant_table_id, table_visit_id, table_tab_id, request_type, status, created_at, resolved_at, resolved_by_member_id, include_service_fee')
     .eq('table_tab_id', tableTabId)
     .eq('request_type', 'bill')
     .order('created_at', { ascending: false })
@@ -69,13 +72,19 @@ export async function getBillRequestState(tableTabId: string): Promise<BillReque
   return request;
 }
 
-export async function requestBill(restaurantSlug: string, tableTabId: string): Promise<RequestBillResult> {
+export async function requestBill(
+  restaurantSlug: string,
+  tableTabId: string,
+  includeServiceFee?: boolean,
+): Promise<RequestBillResult> {
   const { data: authData, error: authError } = await supabase.auth.getSession();
   if (authError || !authData.session?.user.is_anonymous) {
     throw new Error('Utilize seu acesso de cliente para pedir a conta.');
   }
   const { data, error } = await supabase.rpc('request_table_tab_bill', {
-    p_restaurant_slug: restaurantSlug, p_table_tab_id: tableTabId,
+    p_restaurant_slug: restaurantSlug,
+    p_table_tab_id: tableTabId,
+    p_include_service_fee: includeServiceFee ?? false,
   });
   if (error) throw operationError(error, 'Não foi possível pedir a conta. Tente novamente.');
   if (!isRecord(data)) throw new Error('O servidor não confirmou sua solicitação.');

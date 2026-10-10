@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useTableContext } from '../tables/useTableContext';
+import { useRestaurant } from '../restaurants/RestaurantProvider';
 import { supabase } from '../../lib/supabase';
 import {
     getWaiterRequestState,
@@ -34,6 +35,7 @@ export function ServiceActionPopup({
     const dialogRef = useRef<HTMLDialogElement>(null);
     const { restaurantSlug = '' } = useParams();
     const table = useTableContext();
+    const { restaurant } = useRestaurant();
 
     const tableNumber = table.status === 'unverified' ? Number(table.tableNumber) : 0;
     const tableLabel = table.status === 'unverified'
@@ -54,6 +56,7 @@ export function ServiceActionPopup({
     const [billRequest, setBillRequest] = useState<BillRequest | null>(null);
     const [tableTabId, setTableTabId] = useState<string | null>(null);
     const [tabStatus, setTabStatus] = useState<string | null>(null);
+    const [includeServiceFee, setIncludeServiceFee] = useState<boolean | null>(null);
     const [billBusy, setBillBusy] = useState(false);
     const [billError, setBillError] = useState('');
     const [billRateLimitSeconds, setBillRateLimitSeconds] = useState<number | null>(null);
@@ -69,6 +72,7 @@ export function ServiceActionPopup({
             setWaiterError('');
             setBillError('');
             setConfirmCancelBill(false);
+            setIncludeServiceFee(null);
         } else if (!isOpen && dialog.open) {
             dialog.close();
         }
@@ -214,8 +218,14 @@ export function ServiceActionPopup({
             return;
         }
 
+        if (restaurant.serviceFeePercent > 0 && includeServiceFee === null) {
+            setBillBusy(false);
+            setBillError('Selecione se deseja incluir ou não a taxa de serviço antes de pedir a conta.');
+            return;
+        }
+
         try {
-            const res = await requestBill(restaurantSlug, tableTabId);
+            const res = await requestBill(restaurantSlug, tableTabId, includeServiceFee ?? false);
             if (res.status === 'rate_limited') {
                 setBillRateLimitSeconds(res.retryAfterSeconds);
             } else if (res.status === 'created' || res.status === 'existing') {
@@ -475,6 +485,15 @@ export function ServiceActionPopup({
                                     <span aria-hidden="true">🕒</span>
                                 </div>
 
+                                {restaurant.serviceFeePercent > 0 && billRequest && (
+                                    <p className="text-xs text-[#8c7867] mt-1 text-center font-medium">
+                                        Taxa de serviço ({restaurant.serviceFeePercent}%):{' '}
+                                        <strong className="text-[#3d271d]">
+                                            {billRequest.include_service_fee ? 'Incluída' : 'Não incluída'}
+                                        </strong>
+                                    </p>
+                                )}
+
                                 {billError && (
                                     <p role="alert" className="text-xs text-red-600 mt-2 px-2 text-center">
                                         {billError}
@@ -533,6 +552,34 @@ export function ServiceActionPopup({
                                     A equipe receberá sua solicitação para fechar e levar a conta da {tableLabel}.
                                 </p>
 
+                                {restaurant.serviceFeePercent > 0 && (
+                                    <div className="mt-4 mb-2 space-y-2 text-left">
+                                        <p className="text-xs font-semibold text-[#5c493a]">
+                                            Taxa de serviço sugerida ({restaurant.serviceFeePercent}%):
+                                        </p>
+                                        <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${includeServiceFee === true ? 'border-[#b9472b] bg-[#fff6f2] font-semibold text-[#3d271d]' : 'border-[#ded5c8] bg-white text-[#5c493a]'}`}>
+                                            <input
+                                                type="radio"
+                                                name="popup-service-fee"
+                                                checked={includeServiceFee === true}
+                                                onChange={() => setIncludeServiceFee(true)}
+                                                className="accent-[#b9472b]"
+                                            />
+                                            <span>Incluir taxa sugerida (+{restaurant.serviceFeePercent}%)</span>
+                                        </label>
+                                        <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${includeServiceFee === false ? 'border-[#b9472b] bg-[#fff6f2] font-semibold text-[#3d271d]' : 'border-[#ded5c8] bg-white text-[#5c493a]'}`}>
+                                            <input
+                                                type="radio"
+                                                name="popup-service-fee"
+                                                checked={includeServiceFee === false}
+                                                onChange={() => setIncludeServiceFee(false)}
+                                                className="accent-[#b9472b]"
+                                            />
+                                            <span>Pagar apenas o consumo (sem taxa)</span>
+                                        </label>
+                                    </div>
+                                )}
+
                                 {billRateLimitSeconds !== null && billRateLimitSeconds > 0 && (
                                     <p role="status" className="text-xs text-amber-700 bg-amber-50 p-2 rounded-lg text-center">
                                         Limite atingido. Aguarde {billRateLimitSeconds}s para solicitar novamente.
@@ -556,7 +603,7 @@ export function ServiceActionPopup({
                                     <button
                                         type="button"
                                         className="service-popup-btn solid"
-                                        disabled={billBusy || (billRateLimitSeconds !== null && billRateLimitSeconds > 0)}
+                                        disabled={billBusy || (billRateLimitSeconds !== null && billRateLimitSeconds > 0) || (restaurant.serviceFeePercent > 0 && includeServiceFee === null)}
                                         onClick={() => void handleConfirmBill()}
                                     >
                                         {billBusy ? 'Solicitando…' : 'Pedir Conta'}

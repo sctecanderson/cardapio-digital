@@ -70,6 +70,8 @@ export async function saveIdentity(
       theme_text: r.theme.text,
       logo,
       cover,
+      service_fee_percent: r.serviceFeePercent,
+      timezone: r.timezone,
     },
   });
   if (error)

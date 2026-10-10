@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router';
 import { supabase } from '../../lib/supabase';
 import type { StaffAccess } from '../auth/staffAuth';
@@ -43,6 +43,7 @@ function StaffSalonManager({
     memberId: string;
 }) {
     const submitting = useRef(false);
+    const salonInitialLoaded = useRef(false);
 
     // Estado das mesas cadastradas e de todos os atendimentos abertos no salão
     const [allTables, setAllTables] = useState<RestaurantTableItem[]>([]);
@@ -56,6 +57,10 @@ function StaffSalonManager({
 
     // Quantidade de comandas abertas na mesa selecionada
     const [openTabsCount, setOpenTabsCount] = useState<number>(0);
+
+    const handleOpenTabsCountChange = useCallback((count: number) => {
+        setOpenTabsCount(count);
+    }, []);
 
     // Estado da operação de assumir/encerrar mesa
     const [busyAction, setBusyAction] = useState(false);
@@ -84,7 +89,9 @@ function StaffSalonManager({
         let disposed = false;
 
         async function loadSalonData() {
-            setLoading(true);
+            if (!salonInitialLoaded.current) {
+                setLoading(true);
+            }
             setError('');
 
             try {
@@ -115,6 +122,7 @@ function StaffSalonManager({
                         }
                         return null;
                     });
+                    salonInitialLoaded.current = true;
                 }
             } catch (cause) {
                 if (!disposed) {
@@ -446,7 +454,7 @@ function StaffSalonManager({
                                 restaurantSlug={restaurantSlug}
                                 restaurantId={restaurantId}
                                 tableVisitId={currentTableVisit.id}
-                                onOpenTabsCountChange={(count) => setOpenTabsCount(count)}
+                                onOpenTabsCountChange={handleOpenTabsCountChange}
                             />
 
                             {/* 3. SEÇÃO: ACESSOS E ENCERRAMENTO DA MESA */}

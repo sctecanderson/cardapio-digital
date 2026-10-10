@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useRestaurant } from '../restaurants/RestaurantProvider';
 import { getBillRequestState, requestBill, cancelBillRequest } from './billRequests';
 import type { BillRequest } from './billRequests';
 
@@ -20,11 +21,13 @@ export function BillRequestPanel(props: Props) {
 }
 
 function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }: Props) {
+  const { restaurant } = useRestaurant();
   const mounted = useRef(false);
   const acting = useRef(false);
   const revision = useRef(0);
   const reload = useRef<() => void>(() => {});
   const [request, setRequest] = useState<BillRequest | null>(null);
+  const [includeServiceFee, setIncludeServiceFee] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -149,12 +152,16 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
 
   async function handleConfirm() {
     if (acting.current || disabled) return;
+    if (restaurant.serviceFeePercent > 0 && includeServiceFee === null) {
+      setActionError('Selecione se deseja incluir ou não a taxa de serviço antes de pedir a conta.');
+      return;
+    }
     acting.current = true;
     revision.current += 1;
     setBusy(true);
     setActionError('');
     try {
-      const result = await requestBill(restaurantSlug, tableTabId);
+      const result = await requestBill(restaurantSlug, tableTabId, includeServiceFee ?? false);
       if (!mounted.current) return;
       revision.current += 1;
       setNow(Date.now());
@@ -182,6 +189,13 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
       <p role="timer" aria-live="off" aria-label="Tempo aguardando a conta" className="mt-2 font-mono text-lg tabular-nums">
         {elapsed(request.created_at, now)}
       </p>
+
+      {restaurant.serviceFeePercent > 0 && (
+        <p className="mt-2 text-xs font-medium text-amber-950">
+          Preferência de taxa informada:{' '}
+          <strong>{request.include_service_fee ? `Com taxa sugerida (${restaurant.serviceFeePercent}%)` : 'Sem taxa'}</strong>
+        </p>
+      )}
 
       {confirmingCancel ? (
         <div className="mt-3 p-3 bg-white/80 rounded-lg border border-amber-200">
@@ -229,15 +243,44 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
     {tabStatus === 'open' && !pending && (confirming ? <div className="rounded-xl bg-[var(--page)] p-4">
       <p className="font-medium">Pedir a conta da comanda “{tabLabel}”?</p>
       <p className="mt-1 text-sm opacity-75">A solicitação vale para a comanda inteira.</p>
+
+      {restaurant.serviceFeePercent > 0 && (
+        <div className="my-3 space-y-2 text-left">
+          <p className="text-xs font-semibold text-[#5c493a]">
+            Taxa de serviço sugerida ({restaurant.serviceFeePercent}%):
+          </p>
+          <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${includeServiceFee === true ? 'border-[#b9472b] bg-[#fff6f2] font-semibold text-[#3d271d]' : 'border-[#ded5c8] bg-white text-[#5c493a]'}`}>
+            <input
+              type="radio"
+              name="panel-service-fee"
+              checked={includeServiceFee === true}
+              onChange={() => setIncludeServiceFee(true)}
+              className="accent-[#b9472b]"
+            />
+            <span>Incluir taxa sugerida (+{restaurant.serviceFeePercent}%)</span>
+          </label>
+          <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${includeServiceFee === false ? 'border-[#b9472b] bg-[#fff6f2] font-semibold text-[#3d271d]' : 'border-[#ded5c8] bg-white text-[#5c493a]'}`}>
+            <input
+              type="radio"
+              name="panel-service-fee"
+              checked={includeServiceFee === false}
+              onChange={() => setIncludeServiceFee(false)}
+              className="accent-[#b9472b]"
+            />
+            <span>Pagar apenas o consumo (sem taxa)</span>
+          </label>
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" disabled={disabled} onClick={() => void handleConfirm()}
+        <button type="button" disabled={disabled || (restaurant.serviceFeePercent > 0 && includeServiceFee === null)} onClick={() => void handleConfirm()}
           className="min-h-12 flex-1 rounded-xl bg-[var(--brand)] px-4 font-medium text-white disabled:opacity-50">
           {busy ? 'Solicitando…' : 'Sim, pedir conta'}
         </button>
         <button type="button" disabled={busy} onClick={() => setConfirming(false)}
           className="min-h-12 rounded-xl border border-black/20 px-4">Cancelar</button>
       </div>
-    </div> : <button type="button" disabled={disabled} onClick={() => { setConfirming(true); setActionError(''); }}
+    </div> : <button type="button" disabled={disabled} onClick={() => { setConfirming(true); setIncludeServiceFee(null); setActionError(''); }}
       className="mt-2 min-h-12 w-full rounded-xl bg-[var(--brand)] px-4 font-medium text-white disabled:opacity-50">
       {loading ? 'Verificando solicitação…' : retrySeconds > 0 ? `Aguarde ${retrySeconds}s` : 'Pedir conta'}
     </button>)}

@@ -359,6 +359,56 @@ export function IdentityPage() {
               />
             </label>
           </section>
+          <section className="admin-card">
+            <h2>Taxa de serviço e Fuso horário</h2>
+            <div className="admin-grid-2">
+              <label>
+                Taxa de serviço (%)
+                <input
+                  type="number"
+                  min="0"
+                  max="30"
+                  step="0.5"
+                  required
+                  value={draft.serviceFeePercent}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setDraft((d) => ({
+                      ...d,
+                      serviceFeePercent: Number.isFinite(val) ? Math.min(30, Math.max(0, val)) : 0,
+                    }));
+                    setNotice("");
+                  }}
+                />
+              </label>
+              <label>
+                Fuso horário (Timezone)
+                <select
+                  value={draft.timezone}
+                  onChange={(e) => {
+                    setDraft((d) => ({ ...d, timezone: e.target.value }));
+                    setNotice("");
+                  }}
+                >
+                  <option value="America/Sao_Paulo">Brasília / São Paulo (UTC-3)</option>
+                  <option value="America/Manaus">Manaus (UTC-4)</option>
+                  <option value="America/Cuiaba">Cuiabá (UTC-4)</option>
+                  <option value="America/Belem">Belém (UTC-3)</option>
+                  <option value="America/Fortaleza">Fortaleza (UTC-3)</option>
+                  <option value="America/Recife">Recife (UTC-3)</option>
+                  <option value="America/Porto_Velho">Porto Velho (UTC-4)</option>
+                  <option value="America/Rio_Branco">Rio Branco (UTC-5)</option>
+                  <option value="America/Noronha">Fernando de Noronha (UTC-2)</option>
+                </select>
+              </label>
+            </div>
+            <p className="admin-help">
+              A taxa de serviço é opcional e depende da aceitação do cliente (0% a 30%). Se definida em 0%, nenhuma cobrança de serviço é sugerida aos clientes.
+            </p>
+            <p className="admin-help mt-1">
+              O fuso horário é utilizado para agrupar e filtrar os atendimentos e comandas no horário local do restaurante.
+            </p>
+          </section>
         </fieldset>
         <aside className="admin-card identity-preview">
           <h2>Prévia do cardápio</h2>

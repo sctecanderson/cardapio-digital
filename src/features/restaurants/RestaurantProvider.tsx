@@ -18,6 +18,8 @@ export interface RestaurantIdentity extends Restaurant {
   address: string;
   phone: string;
   openingHours: string;
+  serviceFeePercent: number;
+  timezone: string;
 }
 export interface IdentityMedia {
   url: string;
@@ -49,6 +51,14 @@ export function parseRestaurant(value: unknown): RestaurantIdentity {
     Number(v.revision) < 1
   )
     throw new Error("Identidade inválida.");
+  const serviceFeePercent =
+    typeof v.serviceFeePercent === "number" && Number.isFinite(v.serviceFeePercent)
+      ? v.serviceFeePercent
+      : 10;
+  const timezone =
+    typeof v.timezone === "string" && v.timezone.trim().length > 0
+      ? v.timezone.trim()
+      : "America/Sao_Paulo";
   for (const key of ["logo", "cover"]) {
     const m = v[key] as IdentityMedia | null;
     if (

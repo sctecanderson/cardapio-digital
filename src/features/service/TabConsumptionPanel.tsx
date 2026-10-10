@@ -20,6 +20,7 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
   const submitting = useRef(false);
   const pendingItemId = useRef<string | null>(null);
   const mounted = useRef(false);
+  const initialLoaded = useRef(false);
   const [products, setProducts] = useState<ConsumptionProduct[]>([]);
   const [items, setItems] = useState<TabConsumptionItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -42,7 +43,9 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
   useEffect(() => {
     let disposed = false;
     async function load() {
-      setLoading(true);
+      if (!initialLoaded.current) {
+        setLoading(true);
+      }
       setLoadError('');
       try {
         const result = await getTabConsumption(restaurantId, tab.id);
@@ -50,6 +53,7 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
           setProducts(result.products);
           setItems(result.items);
           setTotal(result.totalInCents);
+          initialLoaded.current = true;
         }
       } catch (cause) {
         if (!disposed) setLoadError(cause instanceof Error ? cause.message : 'Não foi possível carregar o consumo.');
@@ -191,18 +195,47 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
             <p className="mt-3 text-xs text-[#8c7867] italic">Nenhum consumo registrado.</p>
           ) : (
             <ul className="mt-3 space-y-2">
-              {items.map((item) => (
-                <li key={item.id} className="rounded-xl border border-[#ded5c8] bg-white p-2.5 text-xs">
-                  <div className="flex justify-between items-start">
-                    <p className="font-semibold text-[13px] text-[#2b1d17]">{item.quantity} × {item.product_name}</p>
-                    <span className="font-bold text-[var(--brand)]">{currency.format(item.line_total_in_cents / 100)}</span>
-                  </div>
-                  <p className="mt-0.5 text-xs text-[#7a6655]">{currency.format(item.unit_price_in_cents / 100)} por unidade</p>
-                  {item.status === 'cancelled' ? (
-                    <p className="mt-1 text-xs text-amber-900 font-medium">
-                      Cancelado — {item.cancellation_reason}
+              {items.map((item) => {
+                const isCancelled = item.status === 'cancelled';
+                return (
+                  <li
+                    key={item.id}
+                    className={`rounded-xl border border-[#ded5c8] p-2.5 text-xs transition-opacity ${
+                      isCancelled ? 'opacity-60 bg-[#faf8f5]' : 'bg-white'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <p
+                        className={`font-semibold text-[13px] ${
+                          isCancelled ? 'line-through text-gray-500' : 'text-[#2b1d17]'
+                        }`}
+                      >
+                        {item.quantity} × {item.product_name}
+                      </p>
+                      <span
+                        className={`${
+                          isCancelled
+                            ? 'line-through text-gray-400 font-normal'
+                            : 'font-bold text-[var(--brand)]'
+                        }`}
+                      >
+                        {currency.format(item.line_total_in_cents / 100)}
+                      </span>
+                    </div>
+                    <p
+                      className={`mt-0.5 text-xs ${
+                        isCancelled ? 'line-through text-gray-400' : 'text-[#7a6655]'
+                      }`}
+                    >
+                      {currency.format(item.unit_price_in_cents / 100)} por unidade
                     </p>
-                  ) : !closed && (
+                    {isCancelled ? (
+                      <div className="mt-1.5">
+                        <span className="inline-block px-2 py-0.5 text-[11px] font-medium rounded bg-gray-100 text-gray-600 border border-gray-200">
+                          Cancelado{item.cancellation_reason ? ` — ${item.cancellation_reason}` : ''}
+                        </span>
+                      </div>
+                    ) : !closed && (
                     cancellingId === item.id ? (
                       <form onSubmit={handleCancel} className="mt-2 space-y-2">
                         <label htmlFor={`cancel-reason-${item.id}`} className="block text-xs font-medium">Motivo do cancelamento</label>
@@ -243,10 +276,10 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
                       >
                         Cancelar lançamento
                       </button>
-                    )
-                  )}
-                </li>
-              ))}
+                    ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
 

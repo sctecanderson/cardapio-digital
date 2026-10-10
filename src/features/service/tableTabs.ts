@@ -156,11 +156,13 @@ export async function linkGuestToTableTab(
 export async function closeTableTab(
   restaurantSlug: string,
   tableTabId: string,
+  finalServiceFeeAccepted?: boolean,
 ): Promise<TableTab> {
   const { data, error } = await supabase
     .rpc('close_table_tab', {
       p_restaurant_slug: restaurantSlug,
       p_table_tab_id: tableTabId,
+      p_final_service_fee_accepted: finalServiceFeeAccepted ?? null,
     })
     .single()
     .overrideTypes<TableTab, { merge: false }>();

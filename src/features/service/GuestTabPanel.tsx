@@ -137,14 +137,48 @@ function GuestTabContent({ restaurantSlug, tableNumber }: {
           </div>
           {state.items.length === 0 ? <p className="text-sm opacity-75">Ainda não há consumo registrado nesta comanda.</p>
             : <ul className="space-y-3">
-              {state.items.map((item) => <li key={item.id} className="rounded-xl bg-[var(--page)] p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <span className="min-w-0 break-words font-medium">{item.quantity} × {item.product_name}</span>
-                  <span className="shrink-0">{currency.format(item.line_total_in_cents / 100)}</span>
-                </div>
-                <p className="mt-1 text-xs opacity-75">{currency.format(item.unit_price_in_cents / 100)} por unidade</p>
-                {item.status === 'cancelled' && <p className="mt-2 text-sm text-amber-900">Cancelado · não incluído no total</p>}
-              </li>)}
+              {state.items.map((item) => {
+                const isCancelled = item.status === 'cancelled';
+                return (
+                  <li
+                    key={item.id}
+                    className={`rounded-xl p-3 transition-opacity ${
+                      isCancelled ? 'opacity-60 bg-gray-50' : 'bg-[var(--page)]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <span
+                        className={`min-w-0 break-words font-medium ${
+                          isCancelled ? 'line-through text-gray-500' : ''
+                        }`}
+                      >
+                        {item.quantity} × {item.product_name}
+                      </span>
+                      <span
+                        className={`shrink-0 ${
+                          isCancelled ? 'line-through text-gray-400 font-normal' : ''
+                        }`}
+                      >
+                        {currency.format(item.line_total_in_cents / 100)}
+                      </span>
+                    </div>
+                    <p
+                      className={`mt-1 text-xs ${
+                        isCancelled ? 'line-through text-gray-400' : 'opacity-75'
+                      }`}
+                    >
+                      {currency.format(item.unit_price_in_cents / 100)} por unidade
+                    </p>
+                    {isCancelled && (
+                      <div className="mt-2">
+                        <span className="inline-block px-2 py-0.5 text-[11px] font-medium rounded bg-gray-100 text-gray-600 border border-gray-200">
+                          Cancelado · não incluído no total
+                        </span>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>}
           <div className="flex items-center justify-between gap-3 border-t border-black/10 pt-4">
             <span className="font-semibold">Total da comanda</span>

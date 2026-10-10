@@ -153,6 +153,7 @@ function TabOrdersContent({
     tableNumber,
     tableQuery,
 }: TabOrdersContentProps) {
+    const { restaurant } = useRestaurant();
     const { menu } = usePublicMenu();
     const tableLabel = `Mesa ${String(tableNumber).padStart(2, '0')}`;
 
@@ -165,13 +166,26 @@ function TabOrdersContent({
 
     // Separação entre primeira carga do contexto e sincronização em segundo plano
     const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const isInitialLoadingRef = useRef(true);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [syncWarning, setSyncWarning] = useState<string | null>(null);
 
-    const [revision, setRevision] = useState(0);
     const requestVersion = useRef(0);
     const actionVersion = useRef(0);
     const isMountedRef = useRef(true);
+
+    // Coordenação de requisições em trânsito e controle de concorrência
+    const isFetchingRef = useRef(false);
+    const hasPendingRefreshRef = useRef(false);
+    const lastFetchTimeRef = useRef(0);
+
+    // Status do canal Realtime e temporizadores
+    const channelStatusRef = useRef<'SUBSCRIBED' | 'DISCONNECTED' | 'CONNECTING'>('CONNECTING');
+    const realtimeDebounceTimerRef = useRef<number | null>(null);
+    const pollingTimerRef = useRef<number | null>(null);
+
+    const HEARTBEAT_INTERVAL_MS = 30_000;
+    const FALLBACK_INTERVAL_MS = 8_000;
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -180,58 +194,118 @@ function TabOrdersContent({
         };
     }, []);
 
-    const refresh = useCallback(() => {
-        requestVersion.current += 1;
-        setRevision((prev) => prev + 1);
-    }, []);
+    // Função de busca atômica protegida contra concorrência e respostas obsoletas
+    const executeRefresh = useCallback(async () => {
+        if (!isMountedRef.current) return;
 
-    // Carregamento de sessão e comanda para o contexto atual
-    useEffect(() => {
-        let isDisposed = false;
-        const currentReqVersion = ++requestVersion.current;
-        const isRequestValid = () => !isDisposed && isMountedRef.current && currentReqVersion === requestVersion.current;
-
-        async function loadContextData() {
-            // Não define isInitialLoading como true durante atualizações em segundo plano
-            try {
-                const [sessionRes, tabRes] = await Promise.all([
-                    getGuestSessionState(restaurantSlug, tableNumber),
-                    getGuestTabState(restaurantSlug, tableNumber),
-                ]);
-
-                if (isRequestValid()) {
-                    setGuestSession(sessionRes.session);
-                    setConfirmationCode(sessionRes.code);
-                    setCodeRemaining(sessionRes.code ? secondsUntil(sessionRes.code.expires_at) : 0);
-                    setTabState(tabRes);
-                    setIsInitialLoading(false);
-                    setErrorMessage(null);
-                    setSyncWarning(null);
-                }
-            } catch (err) {
-                if (isRequestValid()) {
-                    const message = err instanceof Error
-                        ? err.message
-                        : 'Não foi possível carregar as informações da mesa.';
-
-                    if (isInitialLoading) {
-                        // Falha na primeira carga do contexto: mostra card de erro
-                        setIsInitialLoading(false);
-                        setErrorMessage(message);
-                    } else {
-                        // Falha durante atualização em segundo plano: preserva dados e avisa
-                        setSyncWarning('Não foi possível sincronizar os dados da mesa em tempo real.');
-                    }
-                }
-            }
+        if (isFetchingRef.current) {
+            // Se já há consulta em andamento, anota necessidade de nova sincronização ao terminar
+            hasPendingRefreshRef.current = true;
+            return;
         }
 
-        void loadContextData();
+        isFetchingRef.current = true;
+        hasPendingRefreshRef.current = false;
+        const currentReqVersion = ++requestVersion.current;
+        const isRequestValid = () => isMountedRef.current && currentReqVersion === requestVersion.current;
 
-        return () => {
-            isDisposed = true;
-        };
-    }, [restaurantSlug, tableNumber, revision]);
+        try {
+            const [sessionRes, tabRes] = await Promise.all([
+                getGuestSessionState(restaurantSlug, tableNumber),
+                getGuestTabState(restaurantSlug, tableNumber),
+            ]);
+
+            if (isRequestValid()) {
+                setGuestSession(sessionRes.session);
+                setConfirmationCode(sessionRes.code);
+                setCodeRemaining(sessionRes.code ? secondsUntil(sessionRes.code.expires_at) : 0);
+                setTabState(tabRes);
+                if (isInitialLoadingRef.current) {
+                    isInitialLoadingRef.current = false;
+                    setIsInitialLoading(false);
+                }
+                setErrorMessage(null);
+                setSyncWarning(null);
+                lastFetchTimeRef.current = Date.now();
+            }
+        } catch (err) {
+            if (isRequestValid()) {
+                const message = err instanceof Error
+                    ? err.message
+                    : 'Não foi possível carregar as informações da mesa.';
+
+                if (isInitialLoadingRef.current) {
+                    isInitialLoadingRef.current = false;
+                    setIsInitialLoading(false);
+                    setErrorMessage(message);
+                } else {
+                    setSyncWarning('Não foi possível sincronizar os dados da mesa em tempo real.');
+                }
+            }
+        } finally {
+            isFetchingRef.current = false;
+
+            // Se novos eventos foram recebidos durante a consulta, dispara a busca pendente imediatamente
+            if (isMountedRef.current && hasPendingRefreshRef.current) {
+                hasPendingRefreshRef.current = false;
+                void executeRefresh();
+            }
+        }
+    }, [restaurantSlug, tableNumber]);
+
+    const refresh = executeRefresh;
+
+    // Agendamento adaptativo de polling (30s com Realtime ativo vs 8s com Realtime offline)
+    const scheduleNextPoll = useCallback(() => {
+        if (!isMountedRef.current) return;
+        if (pollingTimerRef.current !== null) {
+            window.clearTimeout(pollingTimerRef.current);
+            pollingTimerRef.current = null;
+        }
+
+        // Se a aba estiver oculta, não agenda consultas periódicas
+        if (document.hidden) return;
+
+        const delay = channelStatusRef.current === 'SUBSCRIBED'
+            ? HEARTBEAT_INTERVAL_MS
+            : FALLBACK_INTERVAL_MS;
+
+        pollingTimerRef.current = window.setTimeout(() => {
+            pollingTimerRef.current = null;
+            if (!isMountedRef.current) return;
+
+            if (!document.hidden) {
+                void executeRefresh();
+            }
+            scheduleNextPoll();
+        }, delay);
+    }, [executeRefresh]);
+
+    // Agrupamento de eventos Realtime com debounce curto (150ms)
+    const scheduleRealtimeRefresh = useCallback(() => {
+        if (!isMountedRef.current) return;
+
+        if (document.hidden) {
+            hasPendingRefreshRef.current = true;
+            return;
+        }
+
+        if (realtimeDebounceTimerRef.current !== null) {
+            window.clearTimeout(realtimeDebounceTimerRef.current);
+        }
+
+        realtimeDebounceTimerRef.current = window.setTimeout(() => {
+            realtimeDebounceTimerRef.current = null;
+            if (isMountedRef.current) {
+                void executeRefresh();
+            }
+        }, 150);
+    }, [executeRefresh]);
+
+    // Carga inicial ao montar o componente ou alterar de mesa
+    useEffect(() => {
+        void executeRefresh();
+    }, [executeRefresh]);
 
     // Temporizador do código de confirmação
     useEffect(() => {
@@ -248,46 +322,108 @@ function TabOrdersContent({
         return () => window.clearInterval(interval);
     }, [confirmationCode, codeRemaining]);
 
-    // Inscrição Realtime no Supabase restrita à mesa atual
+    // Inscrição Realtime no Supabase restrita à mesa atual com fallback e coordenação de visibilidade
     useEffect(() => {
         const userId = tabState?.userId;
         const guestId = tabState?.guestSessionId || guestSession?.id;
         const tabId = tabState?.tabId;
 
-        function scheduleRefresh() {
-            if (!document.hidden && isMountedRef.current) refresh();
-        }
-
-        const pollTimer = window.setInterval(scheduleRefresh, 4000);
-        document.addEventListener('visibilitychange', scheduleRefresh);
+        channelStatusRef.current = 'CONNECTING';
 
         let channel = supabase.channel(`tab-realtime:${restaurantSlug}:${tableNumber}:${guestId ?? 'session'}`);
 
         if (userId) {
             channel = channel
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_sessions', filter: `user_id=eq.${userId}` }, scheduleRefresh);
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_sessions', filter: `user_id=eq.${userId}` }, scheduleRealtimeRefresh);
         }
         if (guestId) {
             channel = channel
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_sessions', filter: `id=eq.${guestId}` }, scheduleRefresh)
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'table_tab_guests', filter: `guest_session_id=eq.${guestId}` }, scheduleRefresh);
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_sessions', filter: `id=eq.${guestId}` }, scheduleRealtimeRefresh)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'table_tab_guests', filter: `guest_session_id=eq.${guestId}` }, scheduleRealtimeRefresh);
         }
         if (tabId) {
             channel = channel
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'table_tabs', filter: `id=eq.${tabId}` }, scheduleRefresh)
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'table_tab_items', filter: `table_tab_id=eq.${tabId}` }, scheduleRefresh);
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'table_tabs', filter: `id=eq.${tabId}` }, scheduleRealtimeRefresh)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'table_tab_items', filter: `table_tab_id=eq.${tabId}` }, scheduleRealtimeRefresh);
         }
 
-        channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'table_visits' }, scheduleRefresh);
+        channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'table_visits' }, scheduleRealtimeRefresh);
 
-        channel.subscribe();
+        channel.subscribe((status) => {
+            if (!isMountedRef.current) return;
+
+            if (status === 'SUBSCRIBED') {
+                const wasDisconnected = channelStatusRef.current !== 'SUBSCRIBED';
+                channelStatusRef.current = 'SUBSCRIBED';
+                setSyncWarning(null);
+
+                // Se estava desconectado e reconectou, executa sincronização imediata
+                if (wasDisconnected && (Date.now() - lastFetchTimeRef.current >= 2_000 || hasPendingRefreshRef.current)) {
+                    void executeRefresh();
+                }
+                scheduleNextPoll();
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                channelStatusRef.current = 'DISCONNECTED';
+                scheduleNextPoll(); // Adota polling de fallback mais frequente
+            }
+        });
+
+        function handleVisibilityChange() {
+            if (!isMountedRef.current) return;
+            if (!document.hidden) {
+                // Ao reabrir a aba: se há atualização pendente ou se passaram mais de 4s da última busca
+                const elapsed = Date.now() - lastFetchTimeRef.current;
+                if (hasPendingRefreshRef.current || elapsed >= 4_000) {
+                    void executeRefresh();
+                }
+                scheduleNextPoll();
+            } else {
+                // Aba em segundo plano: pausa o timer periódico
+                if (pollingTimerRef.current !== null) {
+                    window.clearTimeout(pollingTimerRef.current);
+                    pollingTimerRef.current = null;
+                }
+            }
+        }
+
+        function handleOnline() {
+            if (!isMountedRef.current) return;
+            if (!document.hidden) {
+                void executeRefresh();
+                scheduleNextPoll();
+            }
+        }
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('online', handleOnline);
+
+        // Dispara o primeiro agendamento adaptativo de polling
+        scheduleNextPoll();
 
         return () => {
-            window.clearInterval(pollTimer);
-            document.removeEventListener('visibilitychange', scheduleRefresh);
+            if (pollingTimerRef.current !== null) {
+                window.clearTimeout(pollingTimerRef.current);
+                pollingTimerRef.current = null;
+            }
+            if (realtimeDebounceTimerRef.current !== null) {
+                window.clearTimeout(realtimeDebounceTimerRef.current);
+                realtimeDebounceTimerRef.current = null;
+            }
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('online', handleOnline);
             void supabase.removeChannel(channel);
         };
-    }, [tabState?.userId, tabState?.guestSessionId, tabState?.tabId, guestSession?.id, restaurantSlug, tableNumber, refresh]);
+    }, [
+        tabState?.userId,
+        tabState?.guestSessionId,
+        tabState?.tabId,
+        guestSession?.id,
+        restaurantSlug,
+        tableNumber,
+        scheduleRealtimeRefresh,
+        scheduleNextPoll,
+        executeRefresh,
+    ]);
 
     // Geração de comanda protegida contra concorrência e desmontagem
     async function handleGenerateCode() {
@@ -421,6 +557,7 @@ function TabOrdersContent({
     const displayItems = realItems.map((item) => ({
         id: item.id,
         name: item.product_name,
+        isCancelled: item.status === 'cancelled',
         status: item.status === 'cancelled' ? 'Cancelado' : 'Pedido entregue',
         quantity: item.quantity,
         unitPriceInCents: item.unit_price_in_cents,
@@ -428,7 +565,8 @@ function TabOrdersContent({
     }));
 
     const subtotalInCents = readyTab ? readyTab.totalInCents : 0;
-    const serviceFeeInCents = Math.round(subtotalInCents * 0.1);
+    const feePercent = typeof restaurant.serviceFeePercent === 'number' ? restaurant.serviceFeePercent : 10;
+    const serviceFeeInCents = feePercent > 0 ? Math.round(subtotalInCents * (feePercent / 100)) : 0;
     const totalInCents = subtotalInCents + serviceFeeInCents;
 
     // Badge do Header
@@ -692,36 +830,48 @@ function TabOrdersContent({
                             ) : (
                                 <>
                                     <ul className="tab-orders-list">
-                                        {displayItems.map((item) => (
-                                            <li key={item.id} className="tab-order-item">
-                                                <div className="tab-order-avatar">
-                                                    {item.imageUrl ? (
-                                                        <img src={item.imageUrl} alt={item.name} loading="lazy" />
-                                                    ) : (
-                                                        <span className="tab-order-avatar-fallback">🍽️</span>
-                                                    )}
-                                                </div>
-
-                                                <div className="tab-order-details">
-                                                    <span className="tab-order-name">{item.name}</span>
-                                                    <span className="tab-order-status">{item.status}</span>
-                                                </div>
-
-                                                <div className="tab-order-pricing">
-                                                    <div className="tab-order-price-row">
-                                                        <span className="tab-order-qty">{item.quantity}x</span>
-                                                        <strong className="tab-order-price">
-                                                            {currency.format((item.unitPriceInCents * item.quantity) / 100)}
-                                                        </strong>
+                                        {displayItems.map((item) => {
+                                            const isCancelled = item.isCancelled;
+                                            return (
+                                                <li
+                                                    key={item.id}
+                                                    className={`tab-order-item ${isCancelled ? 'tab-order-item-cancelled' : ''}`}
+                                                >
+                                                    <div className={`tab-order-avatar ${isCancelled ? 'tab-order-avatar-cancelled' : ''}`}>
+                                                        {item.imageUrl ? (
+                                                            <img src={item.imageUrl} alt={item.name} loading="lazy" />
+                                                        ) : (
+                                                            <span className="tab-order-avatar-fallback">🍽️</span>
+                                                        )}
                                                     </div>
-                                                    {item.quantity > 1 && (
-                                                        <span className="tab-order-unit-price">
-                                                            {currency.format(item.unitPriceInCents / 100)} cada
+
+                                                    <div className="tab-order-details">
+                                                        <span className={`tab-order-name ${isCancelled ? 'line-through text-gray-400' : ''}`}>
+                                                            {item.name}
                                                         </span>
-                                                    )}
-                                                </div>
-                                            </li>
-                                        ))}
+                                                        <span className={`tab-order-status ${isCancelled ? 'tab-order-status-cancelled' : ''}`}>
+                                                            {item.status}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="tab-order-pricing">
+                                                        <div className="tab-order-price-row">
+                                                            <span className={`tab-order-qty ${isCancelled ? 'line-through text-gray-400' : ''}`}>
+                                                                {item.quantity}x
+                                                            </span>
+                                                            <strong className={`tab-order-price ${isCancelled ? 'line-through text-gray-400 font-normal' : ''}`}>
+                                                                {currency.format((item.unitPriceInCents * item.quantity) / 100)}
+                                                            </strong>
+                                                        </div>
+                                                        {item.quantity > 1 && (
+                                                            <span className={`tab-order-unit-price ${isCancelled ? 'line-through text-gray-400' : ''}`}>
+                                                                {currency.format(item.unitPriceInCents / 100)} cada
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
                                     </ul>
 
                                     <div className="tab-orders-summary">
@@ -729,10 +879,12 @@ function TabOrdersContent({
                                             <span>Subtotal</span>
                                             <strong>{currency.format(subtotalInCents / 100)}</strong>
                                         </div>
-                                        <div className="tab-summary-row">
-                                            <span>Taxa de Serviço (10% - opcional)</span>
-                                            <strong>{currency.format(serviceFeeInCents / 100)}</strong>
-                                        </div>
+                                        {feePercent > 0 && (
+                                            <div className="tab-summary-row">
+                                                <span>Taxa de Serviço ({feePercent}% - opcional)</span>
+                                                <strong>{currency.format(serviceFeeInCents / 100)}</strong>
+                                            </div>
+                                        )}
                                         <div className="tab-summary-row total">
                                             <span>Total</span>
                                             <strong className="tab-grand-total">{currency.format(totalInCents / 100)}</strong>

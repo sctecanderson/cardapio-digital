@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
+import { supabase } from '../../lib/supabase';
 import {
   closeTableTab,
   createTableTab,
@@ -47,6 +48,8 @@ function TableTabsContent({
   const [label, setLabel] = useState('');
   const [selectedGuests, setSelectedGuests] = useState<Record<string, string>>({});
   const [closingTabId, setClosingTabId] = useState<string | null>(null);
+  const [closingFeeAccepted, setClosingFeeAccepted] = useState<boolean>(true);
+  const [restaurantFeePercent, setRestaurantFeePercent] = useState<number>(10);
   const [collapsedTabs, setCollapsedTabs] = useState<Record<string, boolean>>({});
 
   function toggleTabCollapse(tabId: string) {
@@ -63,20 +66,33 @@ function TableTabsContent({
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
 
+  const initialLoaded = useRef(false);
+  const onOpenTabsCountChangeRef = useRef(onOpenTabsCountChange);
+  onOpenTabsCountChangeRef.current = onOpenTabsCountChange;
+
   useEffect(() => {
     let disposed = false;
 
     async function load() {
-      setLoading(true);
+      if (!initialLoaded.current) {
+        setLoading(true);
+      }
       setLoadError('');
 
       try {
-        const result = await getTableTabsState(restaurantId, tableVisitId);
+        const [result, restaurantRes] = await Promise.all([
+          getTableTabsState(restaurantId, tableVisitId),
+          supabase.from('restaurants').select('service_fee_percent').eq('id', restaurantId).maybeSingle(),
+        ]);
 
         if (!disposed) {
           setState(result);
+          if (restaurantRes.data?.service_fee_percent !== undefined) {
+            setRestaurantFeePercent(Number(restaurantRes.data.service_fee_percent));
+          }
           const openCount = result.tabs.filter((t) => t.status === 'open').length;
-          onOpenTabsCountChange?.(openCount);
+          onOpenTabsCountChangeRef.current?.(openCount);
+          initialLoaded.current = true;
         }
       } catch (cause) {
         if (!disposed) {
@@ -98,7 +114,7 @@ function TableTabsContent({
     return () => {
       disposed = true;
     };
-  }, [restaurantId, tableVisitId, refresh, onOpenTabsCountChange]);
+  }, [restaurantId, tableVisitId, refresh]);
 
   const disabled = busy || loading || !!loadError;
 
@@ -193,8 +209,9 @@ function TableTabsContent({
   }
 
   async function handleClose(tableTabId: string) {
+    const feeAccepted = restaurantFeePercent > 0 ? closingFeeAccepted : false;
     await perform(
-      () => closeTableTab(restaurantSlug, tableTabId),
+      () => closeTableTab(restaurantSlug, tableTabId, feeAccepted),
       'Comanda encerrada com sucesso.',
       () => setClosingTabId(null),
     );
@@ -256,16 +273,23 @@ function TableTabsContent({
       )}
 
       {/* Seção: Comandas Abertas Reais */}
-      {loading ? (
+      {loading && !initialLoaded.current ? (
         <p role="status" className="mt-3 text-xs opacity-75">
           Carregando comandas…
         </p>
-      ) : loadError ? (
+      ) : loadError && !initialLoaded.current ? (
         <p role="alert" className="mt-3 text-xs text-red-700">
           {loadError}
         </p>
-      ) : state.tabs.length > 0 && (
-        <div className="mt-5 space-y-4">
+      ) : (
+        <>
+          {loadError && (
+            <p role="alert" className="mt-3 text-xs text-red-700">
+              {loadError}
+            </p>
+          )}
+          {state.tabs.length > 0 && (
+            <div className="mt-5 space-y-4">
           {state.tabs.map((tab) => {
             const links = state.links.filter(
               (link) => link.table_tab_id === tab.id,
@@ -392,7 +416,37 @@ function TableTabsContent({
                             Encerrar a comanda “{tab.label}”?
                           </p>
 
-                          <div className="mt-2 flex flex-wrap gap-2">
+                          {restaurantFeePercent > 0 && (
+                            <div className="mt-2 text-xs">
+                              <span className="text-gray-700 font-medium block mb-1">
+                                Taxa de serviço ({restaurantFeePercent}%):
+                              </span>
+                              <div className="flex gap-4">
+                                <label className="flex items-center gap-1.5 cursor-pointer text-gray-800">
+                                  <input
+                                    type="radio"
+                                    name={`fee-${tab.id}`}
+                                    checked={closingFeeAccepted}
+                                    onChange={() => setClosingFeeAccepted(true)}
+                                    disabled={disabled}
+                                  />
+                                  <span>Aceita (incluir {restaurantFeePercent}%)</span>
+                                </label>
+                                <label className="flex items-center gap-1.5 cursor-pointer text-gray-800">
+                                  <input
+                                    type="radio"
+                                    name={`fee-${tab.id}`}
+                                    checked={!closingFeeAccepted}
+                                    onChange={() => setClosingFeeAccepted(false)}
+                                    disabled={disabled}
+                                  />
+                                  <span>Dispensada (taxa 0%)</span>
+                                </label>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="mt-3 flex flex-wrap gap-2">
                             <button
                               type="button"
                               disabled={disabled}
@@ -433,6 +487,8 @@ function TableTabsContent({
             );
           })}
         </div>
+      )}
+        </>
       )}
     </div>
   );

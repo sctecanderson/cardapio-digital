@@ -15,15 +15,44 @@ import {
 import { PublicMenuProvider } from "../features/menu/PublicMenuProvider";
 import { MenuPage } from "../features/menu/MenuPage";
 import { HomePage } from "../features/menu/HomePage";
-import { ProductPage } from "../features/menu/ProductPage";
-import { ExplorePage } from "../features/explore/ExplorePage";
-import { TabOrdersPage } from "../features/service/TabOrdersPage";
 import { useTableContext } from "../features/tables/useTableContext";
-import { AccessPage } from "../features/auth/AccessPage";
 import { RequireStaffAccess } from "../features/auth/RequireStaffAccess";
-import { StaffServicePage } from "../features/service/StaffServicePage";
-import { StaffHistoryPage } from "../features/service/StaffHistoryPage";
-import { StaffProfilePage } from "../features/service/StaffProfilePage";
+
+const ProductPage = lazy(() =>
+  import("../features/menu/ProductPage").then((m) => ({
+    default: m.ProductPage,
+  })),
+);
+const ExplorePage = lazy(() =>
+  import("../features/explore/ExplorePage").then((m) => ({
+    default: m.ExplorePage,
+  })),
+);
+const TabOrdersPage = lazy(() =>
+  import("../features/service/TabOrdersPage").then((m) => ({
+    default: m.TabOrdersPage,
+  })),
+);
+const AccessPage = lazy(() =>
+  import("../features/auth/AccessPage").then((m) => ({
+    default: m.AccessPage,
+  })),
+);
+const StaffServicePage = lazy(() =>
+  import("../features/service/StaffServicePage").then((m) => ({
+    default: m.StaffServicePage,
+  })),
+);
+const StaffHistoryPage = lazy(() =>
+  import("../features/service/StaffHistoryPage").then((m) => ({
+    default: m.StaffHistoryPage,
+  })),
+);
+const StaffProfilePage = lazy(() =>
+  import("../features/service/StaffProfilePage").then((m) => ({
+    default: m.StaffProfilePage,
+  })),
+);
 const AdminCatalogPage = lazy(() =>
   import("../features/admin/AdminCatalogPage").then((m) => ({
     default: m.AdminCatalogPage,
@@ -128,7 +157,11 @@ function RestaurantLayout() {
     return (
       <div className="restaurant explore-viewport" style={theme}>
         <a href="#content" className="skip-link">Pular para o feed</a>
-        <main id="content" className="explore-main"><Outlet /></main>
+        <main id="content" className="explore-main">
+          <Suspense fallback={<div className="shell py-8 text-center"><p role="status" className="text-xs opacity-60">Carregando feed…</p></div>}>
+            <Outlet />
+          </Suspense>
+        </main>
       </div>
     );
   }
@@ -136,7 +169,11 @@ function RestaurantLayout() {
     return (
       <div className="restaurant product-viewport" style={theme}>
         <a href="#content" className="skip-link">Pular para o produto</a>
-        <main id="content" className="product-main"><Outlet /></main>
+        <main id="content" className="product-main">
+          <Suspense fallback={<div className="shell py-8 text-center"><p role="status" className="text-xs opacity-60">Carregando produto…</p></div>}>
+            <Outlet />
+          </Suspense>
+        </main>
       </div>
     );
   }
@@ -220,14 +257,34 @@ function RestaurantLayout() {
           </>
         )}
         <main id="content" className={`public-main ${isProduct ? 'product-main' : ''}`}>
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="py-6 text-center">
+                <p role="status" className="text-xs text-[var(--ink)] opacity-60">
+                  {isEquipe ? 'Carregando equipe…' : 'Carregando…'}
+                </p>
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>
   );
 }
 function Access() {
-  return <AccessPage />;
+  return (
+    <Suspense
+      fallback={
+        <div className="shell py-8 text-center">
+          <p role="status" className="text-xs opacity-60">Carregando acesso…</p>
+        </div>
+      }
+    >
+      <AccessPage />
+    </Suspense>
+  );
 }
 function NotFound() {
   return (
