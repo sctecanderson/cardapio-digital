@@ -6,12 +6,14 @@ interface ExploreMediaProps {
   product: Product;
   active: boolean;
   nearby: boolean;
+  paused?: boolean;
 }
 
 export function ExploreMedia({
   product,
   active,
   nearby,
+  paused = false,
 }: ExploreMediaProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const manuallyPaused = useRef(false);
@@ -29,6 +31,20 @@ export function ExploreMedia({
 
   useEffect(() => {
     const video = videoRef.current;
+    if (!video || !prepareVideo) return;
+
+    if (paused) {
+      video.pause();
+      return;
+    }
+
+    if (active && !document.hidden && !manuallyPaused.current) {
+      void video.play().catch(() => {});
+    }
+  }, [paused, active, prepareVideo]);
+
+  useEffect(() => {
+    const video = videoRef.current;
 
     if (!video || !prepareVideo) return;
 
@@ -42,6 +58,7 @@ export function ExploreMedia({
       if (
         disposed ||
         !active ||
+        paused ||
         document.hidden ||
         manuallyPaused.current
       ) {
@@ -49,7 +66,7 @@ export function ExploreMedia({
       }
 
       void video!.play().catch(() => {
-        // Se o navegador bloquear autoplay, o botão permite iniciar.
+        // Se o navegador bloquear autoplay, o usuário pode interagir
       });
     }
 
@@ -61,7 +78,7 @@ export function ExploreMedia({
       }
     }
 
-    if (active) {
+    if (active && !paused) {
       attemptPlay();
     } else {
       manuallyPaused.current = false;
@@ -78,27 +95,7 @@ export function ExploreMedia({
         handleVisibility,
       );
     };
-  }, [active, prepareVideo, product.video?.url]);
-
-  async function togglePlayback() {
-    const video = videoRef.current;
-
-    if (!video || !active) return;
-
-    if (!video.paused) {
-      manuallyPaused.current = true;
-      video.pause();
-      return;
-    }
-
-    manuallyPaused.current = false;
-
-    try {
-      await video.play();
-    } catch {
-      setPlaying(false);
-    }
-  }
+  }, [active, paused, prepareVideo, product.video?.url]);
 
   return (
     <div className="absolute inset-0 bg-[#111512]">
@@ -139,17 +136,6 @@ export function ExploreMedia({
             type={product.video.mimeType}
           />
         </video>
-      )}
-
-      {active && prepareVideo && (
-        <button
-          type="button"
-          onClick={() => void togglePlayback()}
-          aria-label={playing ? 'Pausar vídeo' : 'Reproduzir vídeo'}
-          className="absolute right-4 top-20 z-20 min-h-11 rounded-full border border-white bg-black/60 px-4 text-sm text-white"
-        >
-          {playing ? 'Pausar' : 'Reproduzir'}
-        </button>
       )}
     </div>
   );

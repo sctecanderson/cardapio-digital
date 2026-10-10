@@ -3,6 +3,12 @@ dist/
 .env
 .env.*
 !.env.example
+supabase/.temp/
+.backup-check/
+.deletion-check/
+.tools/
+__pycache__/
+*.pyc
 
 # Configuração local de ambiente
 .env.local

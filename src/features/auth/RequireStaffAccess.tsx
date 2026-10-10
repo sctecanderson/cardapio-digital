@@ -53,7 +53,7 @@ function StaffGate({
     async function verifyAccess() {
       const currentGeneration = ++generation;
 
-      setState({ status: 'loading' });
+      setState(current => current.status === 'authorized' ? current : { status: 'loading' });
 
       try {
         const { data, error } =
@@ -109,12 +109,12 @@ function StaffGate({
         generation++;
         clearTimeout(timer);
 
-        if (!session) {
+        if (!session || session.user.is_anonymous) {
           setState({ status: 'denied' });
           return;
         }
 
-        setState({ status: 'loading' });
+        setState(current => current.status === 'authorized' && current.access.userId === session.user.id ? current : { status: 'loading' });
 
         // Consultar fora do callback de autenticação.
         timer = setTimeout(() => {
@@ -124,12 +124,21 @@ function StaffGate({
     );
 
     void verifyAccess();
+    function refreshAccess() {
+      if (!document.hidden) void verifyAccess();
+    }
+    const interval = window.setInterval(refreshAccess, 30_000);
+    document.addEventListener('visibilitychange', refreshAccess);
+    window.addEventListener('online', refreshAccess);
 
     return () => {
       disposed = true;
       generation++;
       clearTimeout(timer);
       subscription.unsubscribe();
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshAccess);
+      window.removeEventListener('online', refreshAccess);
     };
   }, [restaurantSlug, retry]);
 

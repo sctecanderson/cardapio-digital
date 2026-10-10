@@ -1,101 +1,296 @@
-import { useEffect, type CSSProperties } from 'react';
-import { Link, NavLink, Navigate, Outlet, Route, Routes, useParams } from 'react-router';
-import { restaurants } from '../data/restaurants';
-import { PublicMenuProvider } from '../features/menu/PublicMenuProvider';
-import { MenuPage } from '../features/menu/MenuPage';
-import { ProductPage } from '../features/menu/ProductPage';
-import { ExplorePage } from '../features/explore/ExplorePage';
-import { useTableContext } from '../features/tables/useTableContext';
-import { AccessPage } from '../features/auth/AccessPage';
-import { RequireStaffAccess } from '../features/auth/RequireStaffAccess';
-import { StaffServicePage } from '../features/service/StaffServicePage';
+import { useEffect, lazy, Suspense, type CSSProperties } from "react";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  Route,
+  Routes,
+  useParams,
+  useLocation,
+} from "react-router";
+import {
+  RestaurantProvider,
+  useRestaurant,
+} from "../features/restaurants/RestaurantProvider";
+import { PublicMenuProvider } from "../features/menu/PublicMenuProvider";
+import { MenuPage } from "../features/menu/MenuPage";
+import { HomePage } from "../features/menu/HomePage";
+import { ProductPage } from "../features/menu/ProductPage";
+import { ExplorePage } from "../features/explore/ExplorePage";
+import { TabOrdersPage } from "../features/service/TabOrdersPage";
+import { useTableContext } from "../features/tables/useTableContext";
+import { AccessPage } from "../features/auth/AccessPage";
+import { RequireStaffAccess } from "../features/auth/RequireStaffAccess";
+import { StaffServicePage } from "../features/service/StaffServicePage";
+const AdminCatalogPage = lazy(() =>
+  import("../features/admin/AdminCatalogPage").then((m) => ({
+    default: m.AdminCatalogPage,
+  })),
+);
+const AdminLayout = lazy(() =>
+  import("../features/admin/AdminLayout").then((m) => ({
+    default: m.AdminLayout,
+  })),
+);
+const IdentityPage = lazy(() =>
+  import("../features/admin/IdentityPage").then((m) => ({
+    default: m.IdentityPage,
+  })),
+);
+const TablesPage = lazy(() =>
+  import("../features/admin/TablesPage").then((m) => ({
+    default: m.TablesPage,
+  })),
+);
+const AdminOverview = lazy(() =>
+  import("../features/admin/AdminOverview").then((m) => ({
+    default: m.AdminOverview,
+  })),
+);
+const MediaMaintenancePage = lazy(() =>
+  import("../features/admin/MediaMaintenancePage").then((m) => ({
+    default: m.MediaMaintenancePage,
+  })),
+);
+
+const PlatformAccessPage = lazy(() =>
+  import('../features/platform/PlatformAccessPage').then((module) => ({
+    default: module.PlatformAccessPage,
+  })),
+);
+
+const RequirePlatformAccess = lazy(() =>
+  import('../features/platform/RequirePlatformAccess').then((module) => ({
+    default: module.RequirePlatformAccess,
+  })),
+);
+
+const PlatformRestaurantsPage = lazy(() =>
+  import('../features/platform/PlatformRestaurantsPage').then((module) => ({
+    default: module.PlatformRestaurantsPage,
+  })),
+);
+
+const PlatformBackupsPage = lazy(() =>
+  import('../features/platform/PlatformBackupsPage').then((module) => ({ default: module.PlatformBackupsPage })),
+);
+const PlatformDeletionPage = lazy(() =>
+  import('../features/platform/PlatformDeletionPage').then((module) => ({ default: module.PlatformDeletionPage })),
+);
+
+const StaffManagementPage = lazy(() =>
+  import('../features/admin/StaffManagementPage').then(m => ({ default: m.StaffManagementPage })),
+);
+const StaffInvitationPage = lazy(() =>
+  import('../features/auth/StaffInvitationPage').then(m => ({ default: m.StaffInvitationPage })),
+);
+
+function RestaurantRoot() {
+  const { restaurantSlug = "" } = useParams();
+  return (
+    <RestaurantProvider key={restaurantSlug} slug={restaurantSlug}>
+      <RestaurantLayout />
+    </RestaurantProvider>
+  );
+}
 
 function PublicMenuLayout() {
-  const { restaurantSlug = '' } = useParams();
-  return <PublicMenuProvider key={restaurantSlug} restaurantSlug={restaurantSlug}>
-    <Outlet />
-  </PublicMenuProvider>;
+  const { restaurantSlug = "" } = useParams();
+  return (
+    <PublicMenuProvider key={restaurantSlug} restaurantSlug={restaurantSlug}>
+      <Outlet />
+    </PublicMenuProvider>
+  );
 }
 
 function RestaurantLayout() {
-  const { restaurantSlug = '' } = useParams();
   const table = useTableContext();
   const tableQuery =
-    table.status === 'unverified'
-      ? `?mesa=${table.tableNumber}`
-      : '';
-  const restaurant = restaurants[restaurantSlug];
-  useEffect(() => { document.title = restaurant ? `${restaurant.name} · Cardápio` : 'Restaurante não encontrado'; }, [restaurant]);
-  if (!restaurant) return <NotFound />;
-  const theme = { '--brand': restaurant.theme.primary, '--page': restaurant.theme.background, '--ink': restaurant.theme.text } as CSSProperties;
-  return <div className="restaurant" style={theme}>
-    <a href="#content" className="skip-link">Pular para o conteúdo</a>
-    <div className="shell">
-      <header className="flex items-center justify-between gap-4 py-7">
-        <Link to={`/${restaurant.slug}${tableQuery}`} aria-label={`${restaurant.name}, início`} className="wordmark">{restaurant.name}<span>{restaurant.subtitle}</span></Link>
-        <span className="badge">
-          {table.status === 'unverified'
-            ? `Mesa ${table.tableNumber} · demonstração`
-            : table.status === 'invalid'
-              ? 'Mesa inválida'
-              : 'Consulta sem mesa'}
-        </span>
-      </header>
-      <nav className="tabs" aria-label="Modo de visualização">
-        <NavLink
-          end to={`/${restaurant.slug}${tableQuery}`}>
-          Cardápio
-        </NavLink>
-        <NavLink
-          to={`/${restaurant.slug}/explorar${tableQuery}`}>
-          Explorar
-        </NavLink>
-      </nav>
-      <main id="content" className="py-8"><Outlet /></main>
-      <footer className="py-6"><p>Ambiente demonstrativo · Etapa inicial</p><Link to={`/${restaurant.slug}/acesso`}>Acesso da equipe</Link></footer>
+    table.status === "unverified" ? `?mesa=${table.tableNumber}` : "";
+  const { restaurant } = useRestaurant();
+  const location = useLocation();
+  useEffect(() => {
+    document.title = restaurant
+      ? `${restaurant.name} · Cardápio`
+      : "Restaurante não encontrado";
+  }, [restaurant]);
+
+  const theme = {
+    "--brand": restaurant.theme.primary,
+    "--page": restaurant.theme.background,
+    "--ink": restaurant.theme.text,
+  } as CSSProperties;
+  const isExplore = location.pathname.split("/")[2] === "explorar";
+  const isProduct = location.pathname.split("/")[2] === "produto";
+  if (isExplore) {
+    return (
+      <div className="restaurant explore-viewport" style={theme}>
+        <a href="#content" className="skip-link">Pular para o feed</a>
+        <main id="content" className="explore-main"><Outlet /></main>
+      </div>
+    );
+  }
+  if (isProduct) {
+    return (
+      <div className="restaurant product-viewport" style={theme}>
+        <a href="#content" className="skip-link">Pular para o produto</a>
+        <main id="content" className="product-main"><Outlet /></main>
+      </div>
+    );
+  }
+  if (location.pathname.split("/")[2] === "admin")
+    return (
+      <div className="restaurant" style={theme}>
+        <Suspense
+          fallback={
+            <p className="shell py-8" role="status">
+              Carregando administração…
+            </p>
+          }
+        >
+          <Outlet />
+        </Suspense>
+      </div>
+    );
+  return (
+    <div className="restaurant public-site" style={theme}>
+      <a href="#content" className="skip-link">
+        Pular para o conteúdo
+      </a>
+      <div className="shell">
+        {!isProduct && (
+          <>
+            <header className="public-header">
+              <Link
+                to={`/${restaurant.slug}${tableQuery}`}
+                aria-label={`${restaurant.name}, início`}
+                className="wordmark"
+              >
+                {restaurant.logo ? (
+                  <img
+                    src={restaurant.logo.url}
+                    className="public-logo"
+                    alt={restaurant.name}
+                  />
+                ) : (
+                  <>
+                    {restaurant.name}
+                    <span>{restaurant.subtitle}</span>
+                  </>
+                )}
+              </Link>
+              <span className="badge public-table-badge">
+                {table.status === "unverified"
+                  ? `Mesa ${table.tableNumber}`
+                  : table.status === "invalid"
+                    ? "Mesa inválida"
+                    : "Consulta sem mesa"}
+              </span>
+            </header>
+            <nav className="tabs public-tabs" aria-label="Modo de visualização">
+              <NavLink end to={`/${restaurant.slug}${tableQuery}`}>
+                Home
+              </NavLink>
+              <NavLink to={`/${restaurant.slug}/cardapio${tableQuery}`}>
+                Cardápio
+              </NavLink>
+              <NavLink to={`/${restaurant.slug}/explorar${tableQuery}`}>
+                Explorar
+              </NavLink>
+            </nav>
+          </>
+        )}
+        <main id="content" className={`public-main ${isProduct ? 'product-main' : ''}`}>
+          <Outlet />
+        </main>
+      </div>
     </div>
-  </div>;
-}
-function Stage({ title, text }: { title: string; text: string }) {
-  return <section className="panel"><span className="eyebrow">Estrutura inicial</span><h1>{title}</h1><p>{text}</p></section>;
+  );
 }
 function Access() {
   return <AccessPage />;
 }
-function NotFound() { return <main className="shell py-8"><h1>Página não encontrada</h1><p>Confira o endereço do restaurante.</p><Link to="/">Voltar ao início</Link></main>; }
+function NotFound() {
+  return (
+    <main className="shell py-8">
+      <h1>Página não encontrada</h1>
+      <p>Confira o endereço do restaurante.</p>
+      <Link to="/">Voltar ao início</Link>
+    </main>
+  );
+}
 function Start() {
-  return <main className="shell py-8"><span className="eyebrow">Demonstração white-label</span><h1>Cardápio Digital</h1><p>Escolha uma identidade para verificar a estrutura e o tema.</p><div className="grid gap-4 mt-6">{Object.values(restaurants).map(r => <Link className="panel" key={r.slug} to={`/${r.slug}`}><strong>{r.name}</strong><p>{r.subtitle}</p></Link>)}</div></main>;
+  return (
+    <main className="shell py-8">
+      <span className="eyebrow">Cardápio Digital</span>
+      <h1>Bem-vindo</h1>
+      <p>
+        Acesse o endereço ou escaneie o QR Code do seu restaurante para
+        consultar o cardápio.
+      </p>
+    </main>
+  );
 }
 export function App() {
-  return <Routes>
-    <Route path="/" element={<Start />} />
-    <Route path=":restaurantSlug" element={<RestaurantLayout />}>
-      <Route element={<PublicMenuLayout />}>
-      <Route index element={<MenuPage />} />
-
+  return (
+    <Routes>
+      <Route path="/" element={<Start />} />
+      <Route path="convite" element={<Suspense fallback={<p role="status" className="shell py-8">Carregando convite…</p>}><StaffInvitationPage /></Suspense>} />
       <Route
-        path="produto/:productSlug"
-        element={<ProductPage />}
-      />
-      <Route path="explorar" element={<ExplorePage />} />
-      </Route>
-      <Route path="acesso" element={<Access />} />
-      <Route element={<RequireStaffAccess />}>
-        <Route path="equipe/*" element={<StaffServicePage />} />
-      </Route>
+        path="plataforma"
+        element={
+          <Suspense
+            fallback={
+              <main className="shell py-10">
+                <p role="status">Carregando Elozi…</p>
+              </main>
+            }
+          >
+            <Outlet />
+          </Suspense>
+        }
+      >
+        <Route path="acesso" element={<PlatformAccessPage />} />
 
-      <Route element={<RequireStaffAccess requiredRole="admin" />}>
-        <Route
-          path="admin/*"
-          element={
-            <Stage
-              title="Administração"
-              text="Acesso autorizado ao administrador."
-            />
-          }
-        />
+        <Route element={<RequirePlatformAccess />}>
+          <Route index element={<PlatformRestaurantsPage />} />
+          <Route path="restaurantes/:restaurantId/backups" element={<PlatformBackupsPage />} />
+          <Route path="restaurantes/:restaurantId/excluir" element={<PlatformDeletionPage />} />
+          <Route
+            path="restaurantes"
+            element={<PlatformRestaurantsPage />}
+          />
+        </Route>
+
+        <Route path="*" element={<NotFound />} />
       </Route>
-      <Route path="*" element={<NotFound />} />
-    </Route>
-  </Routes>;
+      <Route path=":restaurantSlug" element={<RestaurantRoot />}>
+        <Route element={<PublicMenuLayout />}>
+          <Route index element={<HomePage />} />
+          <Route path="cardapio" element={<MenuPage />} />
+          <Route path="comanda" element={<TabOrdersPage />} />
+
+          <Route path="produto/:productSlug" element={<ProductPage />} />
+          <Route path="explorar" element={<ExplorePage />} />
+        </Route>
+        <Route path="acesso" element={<Access />} />
+        <Route element={<RequireStaffAccess />}>
+          <Route path="equipe/*" element={<StaffServicePage />} />
+        </Route>
+
+        <Route element={<RequireStaffAccess requiredRole="admin" />}>
+          <Route path="admin" element={<AdminLayout />}>
+            <Route index element={<AdminOverview />} />
+            <Route path="catalogo" element={<AdminCatalogPage />} />
+            <Route path="identidade" element={<IdentityPage />} />
+            <Route path="mesas" element={<TablesPage />} />
+            <Route path="midias" element={<MediaMaintenancePage />} />
+            <Route path="equipe" element={<StaffManagementPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Route>
+        <Route path="*" element={<NotFound />} />
+      </Route>
+    </Routes>
+  );
 }
