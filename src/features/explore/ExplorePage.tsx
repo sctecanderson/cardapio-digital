@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import {
+    useEffect,
+    useRef,
+    useState,
+    type KeyboardEvent,
+    type PointerEvent,
+} from 'react';
 import { Link, useParams } from 'react-router';
 import { usePublicMenu, PublicMenuStatus } from '../menu/PublicMenuProvider';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
@@ -18,6 +24,15 @@ function formatLikes(count: number) {
     return String(safeCount);
 }
 
+function prefersReducedMotion(): boolean {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+        return false;
+    }
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+const DOUBLE_TAP_DELAY_MS = 280;
+
 interface PointerStartState {
     pointerId: number;
     productId: string;
@@ -33,12 +48,36 @@ interface LastTapState {
     time: number;
 }
 
+interface PlaybackFeedbackState {
+    productId: string;
+    mode: 'playing' | 'paused';
+    key: number;
+}
+
 function isInteractiveTarget(target: EventTarget | null): boolean {
     if (!(target instanceof Element)) return false;
     return Boolean(
         target.closest(
             'button, a, header, aside, .explore-product-info, .explore-reels-progress, .explore-like-toast',
         ),
+    );
+}
+
+function isArrowNavigationIgnoredTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target.isContentEditable) return true;
+    return Boolean(
+        target.closest(
+            'input, textarea, select, [contenteditable="true"], [role="slider"], [role="spinbutton"], [role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], [role="tablist"], [role="tree"], [role="grid"]',
+        ),
+    );
+}
+
+function isPlaybackKeyIgnoredTarget(target: EventTarget | null): boolean {
+    if (isArrowNavigationIgnoredTarget(target)) return true;
+    if (!(target instanceof Element)) return false;
+    return Boolean(
+        target.closest('button, a, [role="button"], [role="link"]'),
     );
 }
 
@@ -60,14 +99,25 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         ? `?mesa=${table.tableNumber}`
         : '';
     const containerRef = useRef<HTMLDivElement>(null);
+    const activeIndexRef = useRef(0);
     const pointerStartRef = useRef<PointerStartState | null>(null);
     const lastTapRef = useRef<LastTapState | null>(null);
+    const singleTapTimerRef = useRef<number | null>(null);
     const burstTimerRef = useRef<number | null>(null);
+    const playbackTimerRef = useRef<number | null>(null);
 
     const [activeIndex, setActiveIndex] = useState(0);
-    const [isPaused, setIsPaused] = useState(false);
+    const [activeSlidePaused, setActiveSlidePaused] = useState(false);
+    const activeSlidePausedRef = useRef(activeSlidePaused);
+    activeSlidePausedRef.current = activeSlidePaused;
+
+    const [failedVideoUrls, setFailedVideoUrls] = useState<Record<string, string>>({});
+    const failedVideoUrlsRef = useRef(failedVideoUrls);
+    failedVideoUrlsRef.current = failedVideoUrls;
+
     const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
     const [burstProductId, setBurstProductId] = useState<string | null>(null);
+    const [playbackFeedback, setPlaybackFeedback] = useState<PlaybackFeedbackState | null>(null);
 
     const catalog = usePublicMenu();
     const {
@@ -81,17 +131,80 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         clearLikeError,
     } = catalog;
 
+    const hasMenu = Boolean(menu);
     const products = [...(menu?.products ?? [])]
         .filter((product) => product.available)
         .sort((a, b) => a.sortOrder - b.sortOrder);
     const productIds = products.map((product) => product.id).join('|');
+    const productsRef = useRef(products);
+    productsRef.current = products;
+
+    function clearPendingSingleTap() {
+        if (singleTapTimerRef.current !== null) {
+            window.clearTimeout(singleTapTimerRef.current);
+            singleTapTimerRef.current = null;
+        }
+    }
+
+    function clearGestureTracking() {
+        clearPendingSingleTap();
+        pointerStartRef.current = null;
+        lastTapRef.current = null;
+    }
+
+    function activateSlide(nextIndex: number) {
+        if (activeIndexRef.current === nextIndex) return;
+        activeIndexRef.current = nextIndex;
+        clearGestureTracking();
+        activeSlidePausedRef.current = false;
+        setActiveIndex(nextIndex);
+        setActiveSlidePaused(false);
+        setPlaybackFeedback(null);
+    }
+
+    function handleFeedScroll() {
+        clearGestureTracking();
+        const container = containerRef.current;
+        if (!container || container.clientHeight <= 0) return;
+
+        const rawIndex = container.scrollTop / container.clientHeight;
+        const nearestIndex = Math.round(rawIndex);
+        if (
+            Math.abs(rawIndex - nearestIndex) <= 0.35 &&
+            nearestIndex >= 0 &&
+            nearestIndex < productsRef.current.length
+        ) {
+            activateSlide(nearestIndex);
+        }
+    }
 
     useEffect(() => {
         return () => {
+            if (singleTapTimerRef.current !== null) {
+                window.clearTimeout(singleTapTimerRef.current);
+            }
             if (burstTimerRef.current !== null) {
                 window.clearTimeout(burstTimerRef.current);
             }
+            if (playbackTimerRef.current !== null) {
+                window.clearTimeout(playbackTimerRef.current);
+            }
         };
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+            return;
+        }
+        const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+        function handleMotionPreferenceChange(event: MediaQueryListEvent) {
+            if (event.matches) {
+                activeSlidePausedRef.current = true;
+                setActiveSlidePaused(true);
+            }
+        }
+        mediaQuery.addEventListener('change', handleMotionPreferenceChange);
+        return () => mediaQuery.removeEventListener('change', handleMotionPreferenceChange);
     }, []);
 
     useEffect(() => {
@@ -106,35 +219,145 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         const container = containerRef.current;
         if (!container) return;
 
+        activeIndexRef.current = 0;
+        clearPendingSingleTap();
+        pointerStartRef.current = null;
+        lastTapRef.current = null;
+        activeSlidePausedRef.current = false;
         setActiveIndex(0);
+        setActiveSlidePaused(false);
+        setPlaybackFeedback(null);
         container.scrollTop = 0;
         const observer = new IntersectionObserver(
             (entries) => {
                 const visible = entries
-                    .filter((entry) => entry.isIntersecting)
+                    .filter((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.6)
                     .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
                 if (!visible) return;
 
                 const index = Number((visible.target as HTMLElement).dataset.index);
-                if (Number.isInteger(index)) setActiveIndex(index);
+                if (Number.isInteger(index)) {
+                    activateSlide(index);
+                }
             },
-            { root: container, threshold: 0.6 },
+            { root: container, threshold: [0.6, 0.75, 0.9] },
         );
 
         Array.from(container.children).forEach((slide) => observer.observe(slide));
         return () => observer.disconnect();
-    }, [productIds]);
+    }, [hasMenu, productIds]);
+
+    function productHasPlayableVideo(productId: string): boolean {
+        const targetProduct = productsRef.current.find((item) => item.id === productId);
+        const videoUrl = targetProduct?.video?.url ?? null;
+        return videoUrl !== null && failedVideoUrlsRef.current[productId] !== videoUrl;
+    }
+
+    function triggerPlaybackFeedback(productId: string, mode: 'playing' | 'paused') {
+        if (playbackTimerRef.current !== null) {
+            window.clearTimeout(playbackTimerRef.current);
+        }
+        setPlaybackFeedback((prev) => ({
+            productId,
+            mode,
+            key: (prev?.key ?? 0) + 1,
+        }));
+        playbackTimerRef.current = window.setTimeout(() => {
+            setPlaybackFeedback((current) =>
+                current?.productId === productId ? null : current,
+            );
+            playbackTimerRef.current = null;
+        }, 680);
+    }
+
+    function toggleSlidePlayback(productId: string) {
+        const currentActiveProduct = productsRef.current[activeIndexRef.current];
+        if (!currentActiveProduct || currentActiveProduct.id !== productId) {
+            return;
+        }
+        if (!productHasPlayableVideo(productId)) {
+            return;
+        }
+
+        const nextPaused = !activeSlidePausedRef.current;
+        activeSlidePausedRef.current = nextPaused;
+        setActiveSlidePaused(nextPaused);
+        triggerPlaybackFeedback(productId, nextPaused ? 'paused' : 'playing');
+    }
 
     function moveTo(index: number) {
         const container = containerRef.current;
         const target = container?.children.item(index);
         if (!container || !(target instanceof HTMLElement)) return;
 
-        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        clearGestureTracking();
+
+        const activeElement = document.activeElement;
+        if (
+            activeElement instanceof HTMLElement &&
+            container.contains(activeElement) &&
+            activeElement !== container &&
+            !target.contains(activeElement)
+        ) {
+            container.focus({ preventScroll: true });
+        }
+
+        const reducedMotion = prefersReducedMotion();
         container.scrollTo({
             top: target.offsetTop,
             behavior: reducedMotion ? 'instant' : 'smooth',
         });
+    }
+
+    function handleScreenKeyDown(event: KeyboardEvent<HTMLElement>) {
+        if (event.defaultPrevented) return;
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+        if (
+            (event.key === ' ' ||
+                event.key === 'Enter' ||
+                event.key === 'k' ||
+                event.key === 'K') &&
+            !isPlaybackKeyIgnoredTarget(event.target)
+        ) {
+            const currentActiveProduct = productsRef.current[activeIndexRef.current];
+            if (currentActiveProduct && productHasPlayableVideo(currentActiveProduct.id)) {
+                event.preventDefault();
+                toggleSlidePlayback(currentActiveProduct.id);
+            }
+            return;
+        }
+
+        if (isArrowNavigationIgnoredTarget(event.target)) return;
+
+        const direction =
+            event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+        if (!direction) return;
+
+        event.preventDefault();
+        moveTo(Math.max(0, Math.min(products.length - 1, activeIndex + direction)));
+    }
+
+    function handleAutoplayBlocked(productId: string) {
+        const currentActiveProductId =
+            productsRef.current[activeIndexRef.current]?.id ?? null;
+        if (!currentActiveProductId || productId !== currentActiveProductId) {
+            return;
+        }
+        activeSlidePausedRef.current = true;
+        setActiveSlidePaused(true);
+    }
+
+    function handleVideoError(productId: string, videoUrl: string) {
+        setFailedVideoUrls((prev) => {
+            if (prev[productId] === videoUrl) return prev;
+            const next = { ...prev, [productId]: videoUrl };
+            failedVideoUrlsRef.current = next;
+            return next;
+        });
+        setPlaybackFeedback((current) =>
+            current?.productId === productId ? null : current,
+        );
     }
 
     function triggerHeartBurst(productId: string) {
@@ -170,7 +393,22 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         };
     }
 
-    function handleSlidePointerUp(productId: string, event: PointerEvent<HTMLElement>) {
+    function handleSlidePointerMove(event: PointerEvent<HTMLElement>) {
+        const start = pointerStartRef.current;
+        if (!start || start.pointerId !== event.pointerId) return;
+
+        const dx = Math.abs(event.clientX - start.x);
+        const dy = Math.abs(event.clientY - start.y);
+        if (dx > 14 || dy > 14) {
+            clearGestureTracking();
+        }
+    }
+
+    function handleSlidePointerUp(
+        productId: string,
+        hasPlayableVideo: boolean,
+        event: PointerEvent<HTMLElement>,
+    ) {
         const start = pointerStartRef.current;
         pointerStartRef.current = null;
 
@@ -178,7 +416,7 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
             return;
         }
         if (isInteractiveTarget(event.target)) {
-            lastTapRef.current = null;
+            clearGestureTracking();
             return;
         }
 
@@ -189,7 +427,7 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
 
         // Ignora toque longo, arraste ou swipe de navegação vertical/horizontal
         if (duration > 260 || dx > 14 || dy > 14) {
-            lastTapRef.current = null;
+            clearGestureTracking();
             return;
         }
 
@@ -197,24 +435,34 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         if (
             prevTap &&
             prevTap.productId === productId &&
-            now - prevTap.time <= 300 &&
+            now - prevTap.time <= DOUBLE_TAP_DELAY_MS &&
             Math.hypot(event.clientX - prevTap.x, event.clientY - prevTap.y) <= 40
         ) {
+            clearPendingSingleTap();
             lastTapRef.current = null;
             handleDoubleTapLike(productId);
             return;
         }
 
+        clearPendingSingleTap();
         lastTapRef.current = {
             productId,
             x: event.clientX,
             y: event.clientY,
             time: now,
         };
+
+        if (hasPlayableVideo) {
+            singleTapTimerRef.current = window.setTimeout(() => {
+                singleTapTimerRef.current = null;
+                lastTapRef.current = null;
+                toggleSlidePlayback(productId);
+            }, DOUBLE_TAP_DELAY_MS);
+        }
     }
 
     function handleSlidePointerCancel() {
-        pointerStartRef.current = null;
+        clearGestureTracking();
     }
 
     async function handleShare(name: string, description: string, slug: string) {
@@ -252,14 +500,16 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
     }
 
     return (
-        <section className="explore-screen" aria-label="Explorar os produtos">
+        <section
+            className="explore-screen"
+            aria-label="Explorar os produtos"
+            onKeyDown={handleScreenKeyDown}
+        >
             {/* Barrinhas de status / progresso estilo Reels e Stories do Instagram / WhatsApp */}
             <div
                 className="explore-reels-progress"
-                role="progressbar"
-                aria-valuenow={activeIndex + 1}
-                aria-valuemin={1}
-                aria-valuemax={products.length}
+                role="group"
+                aria-label={`Progresso dos pratos: ${activeIndex + 1} de ${products.length}`}
             >
                 {products.map((p, i) => (
                     <button
@@ -267,7 +517,8 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                         type="button"
                         className="explore-progress-seg"
                         onClick={() => moveTo(i)}
-                        aria-label={`Ir para o prato ${i + 1} de ${products.length}`}
+                        aria-label={`Ir para ${p.name} (prato ${i + 1} de ${products.length})`}
+                        aria-current={i === activeIndex ? 'step' : undefined}
                     >
                         <span
                             className="explore-progress-fill"
@@ -296,19 +547,21 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                 role="region"
                 aria-label="Feed de pratos. Deslize para cima ou para baixo."
                 tabIndex={0}
-                onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return;
-                    const direction = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
-                    if (!direction) return;
-                    event.preventDefault();
-                    moveTo(Math.max(0, Math.min(products.length - 1, activeIndex + direction)));
-                }}
+                onScroll={handleFeedScroll}
             >
                 {products.map((product, index) => {
                     const isLiked = isProductLiked(product.id);
                     const isLikePending = isProductLikePending(product.id);
                     const currentLikes = getProductLikesCount(product.id);
                     const showBurst = burstProductId === product.id;
+                    const videoUrl = product.video?.url ?? null;
+                    const hasPlayableVideo =
+                        videoUrl !== null && failedVideoUrls[product.id] !== videoUrl;
+                    const isSlidePaused = index === activeIndex ? activeSlidePaused : true;
+                    const showPlaybackFeedback =
+                        hasPlayableVideo &&
+                        playbackFeedback !== null &&
+                        playbackFeedback.productId === product.id;
 
                     return (
                         <article
@@ -317,7 +570,10 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                             className="explore-slide"
                             aria-label={`${product.name}, produto ${index + 1} de ${products.length}`}
                             onPointerDown={(event) => handleSlidePointerDown(product.id, event)}
-                            onPointerUp={(event) => handleSlidePointerUp(product.id, event)}
+                            onPointerMove={handleSlidePointerMove}
+                            onPointerUp={(event) =>
+                                handleSlidePointerUp(product.id, hasPlayableVideo, event)
+                            }
                             onPointerCancel={handleSlidePointerCancel}
                         >
                             {/* Mídia de Fundo */}
@@ -326,11 +582,42 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                                 product={product}
                                 active={index === activeIndex}
                                 nearby={Math.abs(index - activeIndex) === 1}
-                                paused={isPaused}
+                                paused={isSlidePaused}
+                                onAutoplayBlocked={handleAutoplayBlocked}
+                                onVideoError={handleVideoError}
                             />
 
                             {/* Sombreamento Superior e Inferior para legibilidade */}
                             <div className="explore-shade" aria-hidden="true" />
+
+                            {/* Feedback visual discreto de Play/Pausa por toque simples */}
+                            {showPlaybackFeedback && playbackFeedback && (
+                                <div
+                                    key={playbackFeedback.key}
+                                    className="explore-playback-burst"
+                                    aria-hidden="true"
+                                >
+                                    <div className="explore-playback-badge">
+                                        {playbackFeedback.mode === 'paused' ? (
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="currentColor"
+                                                className="explore-playback-icon-pause"
+                                            >
+                                                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                                            </svg>
+                                        ) : (
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="currentColor"
+                                                className="explore-playback-icon-play"
+                                            >
+                                                <path d="M8 5v14l11-7z" />
+                                            </svg>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Feedback visual discreto de duplo toque */}
                             {showBurst && (
@@ -351,17 +638,6 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                                     <span aria-hidden="true">←</span>
                                     <span>Cardápio</span>
                                 </Link>
-
-                                <div className="explore-top-right">
-                                    <button
-                                        type="button"
-                                        className="explore-pause-pill"
-                                        onClick={() => setIsPaused((prev) => !prev)}
-                                        aria-label={isPaused ? 'Reproduzir prato' : 'Pausar prato'}
-                                    >
-                                        {isPaused ? 'Play' : 'Pausar'}
-                                    </button>
-                                </div>
                             </header>
 
                             {/* Cápsula Lateral Direita de Ações (com botão + que abre e recolhe os ícones) */}

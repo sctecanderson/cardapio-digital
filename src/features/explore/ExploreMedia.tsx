@@ -1,12 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Product } from '../../types/menu';
 
+interface NavigatorNetworkInformation {
+  saveData?: boolean;
+  effectiveType?: string;
+}
+
+function shouldConserveMobileData(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const connection = (
+    navigator as Navigator & { connection?: NavigatorNetworkInformation }
+  ).connection;
+  if (!connection) return false;
+  return (
+    Boolean(connection.saveData) ||
+    connection.effectiveType === 'slow-2g' ||
+    connection.effectiveType === '2g'
+  );
+}
 
 interface ExploreMediaProps {
   product: Product;
   active: boolean;
   nearby: boolean;
   paused?: boolean;
+  onAutoplayBlocked?: (productId: string) => void;
+  onVideoError?: (productId: string, videoUrl: string) => void;
 }
 
 export function ExploreMedia({
@@ -14,88 +33,184 @@ export function ExploreMedia({
   active,
   nearby,
   paused = false,
+  onAutoplayBlocked,
+  onVideoError,
 }: ExploreMediaProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const manuallyPaused = useRef(false);
+  const wasActiveRef = useRef(false);
+  const playGenerationRef = useRef(0);
+  const callbacksRef = useRef({ onAutoplayBlocked, onVideoError });
+  callbacksRef.current = { onAutoplayBlocked, onVideoError };
 
-  const [playing, setPlaying] = useState(false);
-  const [videoFailed, setVideoFailed] = useState(false);
-  const [imageFailed, setImageFailed] = useState(false);
+  const [failedVideoUrl, setFailedVideoUrl] = useState<string | null>(null);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
 
   const cover = product.images.find(
     (image) => image.id === product.coverImageId,
   );
+  const coverUrl = cover?.url ?? null;
+  const videoUrl = product.video?.url ?? null;
 
+  const imageFailed = coverUrl !== null && failedImageUrl === coverUrl;
+  const videoFailed = videoUrl !== null && failedVideoUrl === videoUrl;
+
+  const allowNearbyPreload = nearby && !shouldConserveMobileData();
   const prepareVideo =
-    !!product.video && (active || nearby) && !videoFailed;
+    !!product.video && (active || allowNearbyPreload) && !videoFailed;
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !prepareVideo) return;
+    if (!video || !prepareVideo || !videoUrl) return;
 
-    if (paused) {
-      video.pause();
+    return () => {
+      playGenerationRef.current += 1;
+      if (!video.paused) {
+        video.pause();
+      }
+    };
+  }, [prepareVideo, videoUrl]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !prepareVideo || !videoUrl) {
+      wasActiveRef.current = false;
       return;
     }
 
-    if (active && !document.hidden && !manuallyPaused.current) {
-      void video.play().catch(() => {});
-    }
-  }, [paused, active, prepareVideo]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-
-    if (!video || !prepareVideo) return;
-
+    const currentVideoUrl = videoUrl;
     let disposed = false;
+    let blockedByBrowser = false;
+    let retryFrameId: number | null = null;
 
-    function pause() {
-      video!.pause();
+    function pauseVideo(resetTime: boolean) {
+      if (!video) return;
+      playGenerationRef.current += 1;
+      if (retryFrameId !== null) {
+        window.cancelAnimationFrame(retryFrameId);
+        retryFrameId = null;
+      }
+      if (!video.paused) {
+        video.pause();
+      }
+      if (resetTime) {
+        try {
+          if (video.currentTime > 0) {
+            video.currentTime = 0;
+          }
+        } catch {
+          // Ignora se o navegador ainda não carregou metadados suficientes para seek
+        }
+      }
     }
 
-    function attemptPlay() {
+    function attemptPlay(isRetry = false) {
       if (
+        !video ||
         disposed ||
+        blockedByBrowser ||
         !active ||
         paused ||
-        document.hidden ||
-        manuallyPaused.current
+        document.hidden
       ) {
         return;
       }
 
-      void video!.play().catch(() => {
-        // Se o navegador bloquear autoplay, o usuário pode interagir
-      });
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playsInline = true;
+
+      const generation = ++playGenerationRef.current;
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        void playPromise.catch((err: unknown) => {
+          if (
+            disposed ||
+            !active ||
+            paused ||
+            document.hidden ||
+            generation !== playGenerationRef.current
+          ) {
+            return;
+          }
+          const errorName = err instanceof DOMException ? err.name : '';
+          // Se uma transição de atributo/buffer gerou AbortError enquanto o slide segue ativo, retenta quando pronto.
+          if (errorName === 'AbortError') {
+            if (!isRetry && video.readyState >= 2) {
+              retryFrameId = window.requestAnimationFrame(() => {
+                retryFrameId = null;
+                attemptPlay(true);
+              });
+            }
+            return;
+          }
+          if (errorName === 'NotAllowedError') {
+            blockedByBrowser = true;
+            callbacksRef.current.onAutoplayBlocked?.(product.id);
+            return;
+          }
+          if (video.error) {
+            setFailedVideoUrl(currentVideoUrl);
+            callbacksRef.current.onVideoError?.(product.id, currentVideoUrl);
+          }
+        });
+      }
     }
 
-    function handleVisibility() {
+    function handleReadyToPlay() {
+      if (
+        !disposed &&
+        !blockedByBrowser &&
+        active &&
+        !paused &&
+        !document.hidden &&
+        video &&
+        video.paused
+      ) {
+        attemptPlay(true);
+      }
+    }
+
+    function handleVisibilityChange() {
       if (document.hidden) {
-        pause();
-      } else {
+        pauseVideo(false);
+      } else if (active && !paused && !blockedByBrowser) {
         attemptPlay();
       }
     }
 
-    if (active && !paused) {
-      attemptPlay();
+    if (active) {
+      if (paused || document.hidden) {
+        pauseVideo(false);
+      } else {
+        attemptPlay();
+      }
+      wasActiveRef.current = true;
     } else {
-      manuallyPaused.current = false;
-      pause();
+      pauseVideo(wasActiveRef.current);
+      wasActiveRef.current = false;
     }
 
-    document.addEventListener('visibilitychange', handleVisibility);
+    video.addEventListener('loadeddata', handleReadyToPlay);
+    video.addEventListener('canplay', handleReadyToPlay);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       disposed = true;
-      pause();
-      document.removeEventListener(
-        'visibilitychange',
-        handleVisibility,
-      );
+      if (retryFrameId !== null) {
+        window.cancelAnimationFrame(retryFrameId);
+      }
+      video.removeEventListener('loadeddata', handleReadyToPlay);
+      video.removeEventListener('canplay', handleReadyToPlay);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [active, paused, prepareVideo, product.video?.url]);
+  }, [active, paused, prepareVideo, videoUrl, product.id]);
+
+  function handleVideoError() {
+    if (videoUrl) {
+      setFailedVideoUrl(videoUrl);
+      callbacksRef.current.onVideoError?.(product.id, videoUrl);
+    }
+  }
 
   return (
     <div className="absolute inset-0 bg-[#111512]">
@@ -106,7 +221,8 @@ export function ExploreMedia({
           className="absolute inset-0 h-full w-full object-cover"
           loading={active || nearby ? 'eager' : 'lazy'}
           decoding="async"
-          onError={() => setImageFailed(true)}
+          draggable={false}
+          onError={() => setFailedImageUrl(cover.url)}
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center p-6 text-white">
@@ -117,26 +233,17 @@ export function ExploreMedia({
       {prepareVideo && product.video && (
         <video
           ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover"
-          poster={cover?.url}
+          src={product.video.url}
+          className="absolute inset-0 h-full w-full object-cover bg-transparent"
+          poster={cover && !imageFailed ? cover.url : undefined}
           preload={active ? 'auto' : 'metadata'}
           muted
           playsInline
           loop
           aria-label={`Vídeo de ${product.name}`}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onError={() => {
-            setVideoFailed(true);
-            setPlaying(false);
-          }}
-        >
-          <source
-            src={product.video.url}
-            type={product.video.mimeType}
-          />
-        </video>
+          onError={handleVideoError}
+        />
       )}
     </div>
   );
-}
+}

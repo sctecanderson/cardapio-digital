@@ -1016,6 +1016,7 @@ footer a {
     overflow-y: auto;
     overscroll-behavior-y: contain;
     scroll-snap-type: y mandatory;
+    touch-action: pan-y;
     scrollbar-width: none;
     outline: none;
 }
@@ -1038,6 +1039,9 @@ footer a {
     color: #fff;
     scroll-snap-align: start;
     scroll-snap-stop: always;
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .explore-shade {
@@ -1075,10 +1079,18 @@ footer a {
     border: none;
     padding: 0;
     border-radius: 999px;
-    overflow: hidden;
     cursor: pointer;
     position: relative;
     display: block;
+}
+
+.explore-progress-seg::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -8px;
+    bottom: -9px;
 }
 
 .explore-progress-fill {
@@ -1086,10 +1098,11 @@ footer a {
     height: 100%;
     background: #ffffff;
     border-radius: 999px;
+    overflow: hidden;
     transition: width 0.25s ease;
 }
 
-/* 1. Topbar Flutuante: ← Cardápio | Pausar */
+/* 1. Topbar Flutuante: ← Cardápio */
 .explore-topbar {
     position: absolute;
     z-index: 10;
@@ -1116,33 +1129,6 @@ footer a {
 
 .explore-back-link:hover {
     opacity: 0.85;
-}
-
-.explore-top-right {
-    display: flex;
-    align-items: center;
-}
-
-.explore-pause-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.18);
-    border: 1px solid rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    color: #ffffff;
-    border-radius: 999px;
-    padding: 4px 14px;
-    font-size: 11.5px;
-    font-weight: 500;
-    cursor: pointer;
-    line-height: 1.2;
-    transition: all 0.15s ease;
-}
-
-.explore-pause-pill:hover {
-    background: rgba(255, 255, 255, 0.28);
 }
 
 /* 2. Cápsula Lateral Direita de Ações (Quase incolor, com blur, posicionada mais acima e recolhível pelo '+') */
@@ -1293,6 +1279,8 @@ footer a {
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 .explore-featured-tag {
@@ -1361,6 +1349,7 @@ footer a {
     transform: translateY(-1px);
 }
 
+.explore-playback-burst,
 .explore-like-burst {
     position: absolute;
     inset: 0;
@@ -1368,6 +1357,147 @@ footer a {
     display: grid;
     place-items: center;
     pointer-events: none;
+}
+
+.explore-playback-badge {
+    position: relative;
+    isolation: isolate;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(
+        circle at 50% 42%,
+        rgba(34, 40, 36, 0.62) 0%,
+        rgba(17, 21, 18, 0.46) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.26);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #ffffff;
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.36),
+        inset 0 1px 1px rgba(255, 255, 255, 0.18);
+    animation: explore-playback-pop 0.66s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.explore-playback-badge::before {
+    content: "";
+    position: absolute;
+    inset: -22px;
+    border-radius: 50%;
+    z-index: -2;
+    pointer-events: none;
+    background: radial-gradient(
+        circle,
+        rgba(255, 255, 255, 0.34) 0%,
+        rgba(235, 232, 226, 0.22) 34%,
+        rgba(17, 21, 18, 0.16) 62%,
+        transparent 78%
+    );
+    filter: blur(12px);
+    animation: explore-playback-smoke 0.68s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.explore-playback-badge::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    z-index: -1;
+    pointer-events: none;
+    border: 1.5px solid rgba(255, 255, 255, 0.36);
+    background: radial-gradient(
+        circle,
+        rgba(255, 255, 255, 0.16) 0%,
+        rgba(255, 255, 255, 0.05) 52%,
+        transparent 72%
+    );
+    box-shadow: 0 0 22px rgba(255, 255, 255, 0.18);
+    animation: explore-playback-wave 0.62s cubic-bezier(0.12, 0.88, 0.28, 1) forwards;
+}
+
+.explore-playback-badge svg {
+    width: 30px;
+    height: 30px;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.38));
+}
+
+.explore-playback-icon-play {
+    transform: translateX(1.5px);
+}
+
+@keyframes explore-playback-pop {
+    0% {
+        opacity: 0;
+        transform: scale(0.58);
+    }
+    26% {
+        opacity: 0.96;
+        transform: scale(1.06);
+    }
+    58% {
+        opacity: 0.92;
+        transform: scale(0.99);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.12);
+    }
+}
+
+@keyframes explore-playback-smoke {
+    0% {
+        opacity: 0;
+        transform: scale(0.45);
+    }
+    28% {
+        opacity: 0.72;
+        transform: scale(0.95);
+    }
+    65% {
+        opacity: 0.38;
+        transform: scale(1.42);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.78);
+    }
+}
+
+@keyframes explore-playback-wave {
+    0% {
+        opacity: 0;
+        transform: scale(0.62);
+    }
+    22% {
+        opacity: 0.78;
+        transform: scale(0.96);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.85);
+    }
+}
+
+@keyframes explore-playback-fade-soft {
+    0% {
+        opacity: 0;
+        transform: scale(0.92);
+    }
+    25% {
+        opacity: 0.95;
+        transform: scale(1);
+    }
+    65% {
+        opacity: 0.9;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.02);
+    }
 }
 
 .explore-like-burst svg {
@@ -1420,10 +1550,32 @@ footer a {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .explore-playback-badge {
+        animation: explore-playback-fade-soft 0.64s ease-out forwards;
+    }
+
+    .explore-playback-badge::before {
+        animation: explore-playback-smoke 0.66s ease-out forwards;
+    }
+
+    .explore-playback-badge::after {
+        animation: explore-playback-wave 0.6s ease-out forwards;
+    }
+
     .explore-like-burst svg {
         animation: none;
         opacity: 0.92;
         transform: scale(1);
+    }
+
+    .explore-progress-fill,
+    .explore-back-link,
+    .explore-actions-sidebar,
+    .explore-actions-group,
+    .explore-action-icon,
+    .explore-plus-btn .explore-plus-svg,
+    .explore-details-pill {
+        transition: none;
     }
 }
 
