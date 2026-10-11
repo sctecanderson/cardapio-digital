@@ -27,6 +27,21 @@ function getCover(product: Product) {
     ?? null;
 }
 
+function formatLikes(count: number) {
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1).replace('.0', '')}k`;
+  }
+  return String(Math.max(0, count));
+}
+
+function HeartBadgeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  );
+}
+
 function MenuIcon({ name }: { name: 'home' | 'waiter' | 'bill' }) {
   if (name === 'home') return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -187,6 +202,7 @@ function RestaurantMenuContent({
         <section aria-label="Destaque principal">
           {(() => {
             const image = getCover(featuredProduct);
+            const likesCount = catalog.getProductLikesCount(featuredProduct.id);
             return (
               <Link
                 to={`/${restaurantSlug}/produto/${featuredProduct.slug}${tableQuery}`}
@@ -206,21 +222,17 @@ function RestaurantMenuContent({
                       {featuredProduct.name}
                     </div>
                   )}
-                  <span className="menu-featured-rating">
-                    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                    4.9
+                  <span className="menu-featured-rating" aria-label={`${likesCount} curtidas`}>
+                    <HeartBadgeIcon />
+                    {formatLikes(likesCount)}
                   </span>
                 </div>
                 <div className="menu-featured-copy">
                   <div className="menu-featured-header-row">
                     <h2 className="menu-featured-title">{featuredProduct.name}</h2>
-                    <span className="menu-featured-inline-rating">
-                      <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                      4.9
+                    <span className="menu-featured-inline-rating" aria-label={`${likesCount} curtidas`}>
+                      <HeartBadgeIcon />
+                      {formatLikes(likesCount)}
                     </span>
                   </div>
                   <div className="menu-featured-desc-row">
@@ -244,6 +256,7 @@ function RestaurantMenuContent({
           <ul className="menu-items-list">
             {listProducts.map((product) => {
               const image = getCover(product);
+              const likesCount = catalog.getProductLikesCount(product.id);
               return (
                 <li key={product.id}>
                   <Link
@@ -271,11 +284,9 @@ function RestaurantMenuContent({
                       <p className="menu-item-desc">{product.shortDescription || product.description}</p>
                       <div className="menu-item-footer">
                         <strong className="menu-item-price">{currency.format(product.priceInCents / 100)}</strong>
-                        <span className="menu-item-rating">
-                          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                          {product.featured ? '4.8' : '4.7'}
+                        <span className="menu-item-rating" aria-label={`${likesCount} curtidas`}>
+                          <HeartBadgeIcon />
+                          {formatLikes(likesCount)}
                         </span>
                       </div>
                     </div>

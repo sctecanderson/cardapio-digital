@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { usePublicMenu, PublicMenuStatus } from '../menu/PublicMenuProvider';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
@@ -10,58 +10,36 @@ const currency = new Intl.NumberFormat('pt-BR', {
     currency: 'BRL',
 });
 
-function getProductReview(productName: string) {
-    const name = productName.toLowerCase();
-    if (name.includes('risoto')) {
-        return {
-            author: '@thiago_sena',
-            comment: 'O melhor risoto que já comi na vida! Cremoso e muito saboroso.',
-            initialLikes: 1240,
-            commentsCount: 84,
-            rating: '4.9',
-        };
+function formatLikes(count: number) {
+    const safeCount = Math.max(0, count);
+    if (safeCount >= 1000) {
+        return `${(safeCount / 1000).toFixed(1)}k`;
     }
-    if (name.includes('polvo') || name.includes('salmão') || name.includes('peixe') || name.includes('frutos')) {
-        return {
-            author: '@marina_costa',
-            comment: 'Ponto perfeito, incrivelmente macio e com tempero inesquecível.',
-            initialLikes: 980,
-            commentsCount: 62,
-            rating: '4.9',
-        };
-    }
-    if (name.includes('batata') || name.includes('croquete') || name.includes('entrada') || name.includes('burrata') || name.includes('bruschetta')) {
-        return {
-            author: '@rodrigo_m',
-            comment: 'Crocante por fora e macia por dentro, entrada obrigatória!',
-            initialLikes: 1150,
-            commentsCount: 77,
-            rating: '4.8',
-        };
-    }
-    if (name.includes('sobremesa') || name.includes('brownie') || name.includes('pudim') || name.includes('torta') || name.includes('doce')) {
-        return {
-            author: '@carolina_f',
-            comment: 'Doçura equilibrada, textura espetacular para encerrar.',
-            initialLikes: 830,
-            commentsCount: 51,
-            rating: '4.9',
-        };
-    }
-    return {
-        author: '@gabriel_v',
-        comment: 'Experiência gastronômica maravilhosa, sabor e apresentação impecáveis.',
-        initialLikes: 1020,
-        commentsCount: 65,
-        rating: '4.9',
-    };
+    return String(safeCount);
 }
 
-function formatLikes(count: number) {
-    if (count >= 1000) {
-        return `${(count / 1000).toFixed(1)}k`;
-    }
-    return String(count);
+interface PointerStartState {
+    pointerId: number;
+    productId: string;
+    x: number;
+    y: number;
+    time: number;
+}
+
+interface LastTapState {
+    productId: string;
+    x: number;
+    y: number;
+    time: number;
+}
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof Element)) return false;
+    return Boolean(
+        target.closest(
+            'button, a, header, aside, .explore-product-info, .explore-reels-progress, .explore-like-toast',
+        ),
+    );
 }
 
 export function ExplorePage() {
@@ -82,18 +60,47 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         ? `?mesa=${table.tableNumber}`
         : '';
     const containerRef = useRef<HTMLDivElement>(null);
+    const pointerStartRef = useRef<PointerStartState | null>(null);
+    const lastTapRef = useRef<LastTapState | null>(null);
+    const burstTimerRef = useRef<number | null>(null);
 
     const [activeIndex, setActiveIndex] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
-    const [likedMap, setLikedMap] = useState<Record<string, boolean>>({});
     const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+    const [burstProductId, setBurstProductId] = useState<string | null>(null);
 
     const catalog = usePublicMenu();
-    const menu = catalog.menu;
+    const {
+        menu,
+        isProductLiked,
+        isProductLikePending,
+        getProductLikesCount,
+        likeProduct,
+        toggleProductLike,
+        likeError,
+        clearLikeError,
+    } = catalog;
+
     const products = [...(menu?.products ?? [])]
         .filter((product) => product.available)
         .sort((a, b) => a.sortOrder - b.sortOrder);
     const productIds = products.map((product) => product.id).join('|');
+
+    useEffect(() => {
+        return () => {
+            if (burstTimerRef.current !== null) {
+                window.clearTimeout(burstTimerRef.current);
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!likeError) return;
+        const timer = window.setTimeout(() => {
+            clearLikeError();
+        }, 4000);
+        return () => window.clearTimeout(timer);
+    }, [likeError, clearLikeError]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -130,11 +137,84 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         });
     }
 
-    function toggleLike(productId: string) {
-        setLikedMap((prev) => ({
-            ...prev,
-            [productId]: !prev[productId],
-        }));
+    function triggerHeartBurst(productId: string) {
+        if (burstTimerRef.current !== null) {
+            window.clearTimeout(burstTimerRef.current);
+        }
+        setBurstProductId(productId);
+        burstTimerRef.current = window.setTimeout(() => {
+            setBurstProductId((current) => (current === productId ? null : current));
+            burstTimerRef.current = null;
+        }, 720);
+    }
+
+    function handleDoubleTapLike(productId: string) {
+        triggerHeartBurst(productId);
+        if (!isProductLiked(productId)) {
+            void likeProduct(productId);
+        }
+    }
+
+    function handleSlidePointerDown(productId: string, event: PointerEvent<HTMLElement>) {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        if (isInteractiveTarget(event.target)) {
+            pointerStartRef.current = null;
+            return;
+        }
+        pointerStartRef.current = {
+            pointerId: event.pointerId,
+            productId,
+            x: event.clientX,
+            y: event.clientY,
+            time: performance.now(),
+        };
+    }
+
+    function handleSlidePointerUp(productId: string, event: PointerEvent<HTMLElement>) {
+        const start = pointerStartRef.current;
+        pointerStartRef.current = null;
+
+        if (!start || start.pointerId !== event.pointerId || start.productId !== productId) {
+            return;
+        }
+        if (isInteractiveTarget(event.target)) {
+            lastTapRef.current = null;
+            return;
+        }
+
+        const now = performance.now();
+        const duration = now - start.time;
+        const dx = Math.abs(event.clientX - start.x);
+        const dy = Math.abs(event.clientY - start.y);
+
+        // Ignora toque longo, arraste ou swipe de navegação vertical/horizontal
+        if (duration > 260 || dx > 14 || dy > 14) {
+            lastTapRef.current = null;
+            return;
+        }
+
+        const prevTap = lastTapRef.current;
+        if (
+            prevTap &&
+            prevTap.productId === productId &&
+            now - prevTap.time <= 300 &&
+            Math.hypot(event.clientX - prevTap.x, event.clientY - prevTap.y) <= 40
+        ) {
+            lastTapRef.current = null;
+            handleDoubleTapLike(productId);
+            return;
+        }
+
+        lastTapRef.current = {
+            productId,
+            x: event.clientX,
+            y: event.clientY,
+            time: now,
+        };
+    }
+
+    function handleSlidePointerCancel() {
+        pointerStartRef.current = null;
     }
 
     async function handleShare(name: string, description: string, slug: string) {
@@ -199,6 +279,17 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                 ))}
             </div>
 
+            {likeError && (
+                <div
+                    className="explore-like-toast"
+                    role="status"
+                    aria-live="polite"
+                    onClick={clearLikeError}
+                >
+                    {likeError}
+                </div>
+            )}
+
             <div
                 ref={containerRef}
                 className="explore-feed"
@@ -214,9 +305,10 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                 }}
             >
                 {products.map((product, index) => {
-                    const review = getProductReview(product.name);
-                    const isLiked = !!likedMap[product.id];
-                    const currentLikes = review.initialLikes + (isLiked ? 1 : 0);
+                    const isLiked = isProductLiked(product.id);
+                    const isLikePending = isProductLikePending(product.id);
+                    const currentLikes = getProductLikesCount(product.id);
+                    const showBurst = burstProductId === product.id;
 
                     return (
                         <article
@@ -224,6 +316,9 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                             data-index={index}
                             className="explore-slide"
                             aria-label={`${product.name}, produto ${index + 1} de ${products.length}`}
+                            onPointerDown={(event) => handleSlidePointerDown(product.id, event)}
+                            onPointerUp={(event) => handleSlidePointerUp(product.id, event)}
+                            onPointerCancel={handleSlidePointerCancel}
                         >
                             {/* Mídia de Fundo */}
                             <ExploreMedia
@@ -237,7 +332,16 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                             {/* Sombreamento Superior e Inferior para legibilidade */}
                             <div className="explore-shade" aria-hidden="true" />
 
-                            {/* Cabeçalho Flutuante Superior (Sem logo NOMA e sem contador 1/5) */}
+                            {/* Feedback visual discreto de duplo toque */}
+                            {showBurst && (
+                                <div className="explore-like-burst" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="#e63946">
+                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                                    </svg>
+                                </div>
+                            )}
+
+                            {/* Cabeçalho Flutuante Superior */}
                             <header className="explore-topbar">
                                 <Link
                                     to={`/${restaurantSlug}/cardapio${tableQuery}`}
@@ -271,8 +375,16 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                                     <button
                                         type="button"
                                         className={`explore-action-item ${isLiked ? 'active' : ''}`}
-                                        onClick={() => toggleLike(product.id)}
-                                        aria-label={isLiked ? 'Descurtir' : 'Curtir'}
+                                        onClick={() => {
+                                            void toggleProductLike(product.id);
+                                        }}
+                                        aria-label={
+                                            isLiked
+                                                ? `Descurtir ${product.name} (${currentLikes} curtidas)`
+                                                : `Curtir ${product.name} (${currentLikes} curtidas)`
+                                        }
+                                        aria-pressed={isLiked}
+                                        aria-busy={isLikePending}
                                     >
                                         <div className="explore-action-icon">
                                             <svg
@@ -286,36 +398,6 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                                         </div>
                                         <span className="explore-action-label">{formatLikes(currentLikes)}</span>
                                     </button>
-
-                                    {/* Botão Comentários */}
-                                    <button
-                                        type="button"
-                                        className="explore-action-item"
-                                        onClick={() => {
-                                            alert(`Comentários de clientes sobre ${product.name}:\n\n${review.author}: "${review.comment}"`);
-                                        }}
-                                        aria-label="Ver comentários"
-                                    >
-                                        <div className="explore-action-icon">
-                                            <svg viewBox="0 0 24 24" fill="white" aria-hidden="true">
-                                                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
-                                                <circle cx="8" cy="10" r="1.3" fill="#111512" />
-                                                <circle cx="12" cy="10" r="1.3" fill="#111512" />
-                                                <circle cx="16" cy="10" r="1.3" fill="#111512" />
-                                            </svg>
-                                        </div>
-                                        <span className="explore-action-label">{review.commentsCount}</span>
-                                    </button>
-
-                                    {/* Nota / Avaliação */}
-                                    <div className="explore-action-item rating-item" aria-label={`Avaliação ${review.rating}`}>
-                                        <div className="explore-action-icon">
-                                            <svg viewBox="0 0 24 24" fill="#e59819" aria-hidden="true">
-                                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                                            </svg>
-                                        </div>
-                                        <span className="explore-action-label">★ {review.rating}</span>
-                                    </div>
 
                                     {/* Compartilhar */}
                                     <button
@@ -332,7 +414,7 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                                     </button>
                                 </div>
 
-                                {/* Botão '+' para alternar o menu lateral (fecha e abre os ícones de curtir/comentar) */}
+                                {/* Botão '+' para alternar o menu lateral (fecha e abre os ícones de ações) */}
                                 <button
                                     type="button"
                                     className={`explore-action-item explore-plus-btn ${actionsMenuOpen ? 'active' : ''}`}
@@ -382,13 +464,6 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                                     <span>Ver detalhes</span>
                                     <span aria-hidden="true">↗</span>
                                 </Link>
-
-                                {/* Card de Depoimento de Cliente */}
-                                <div className="explore-customer-review">
-                                    <span className="review-author">{review.author}:</span>{' '}
-                                    <span className="review-text">{review.comment}</span>{' '}
-                                    <span className="review-stars" aria-hidden="true">★★★★★</span>
-                                </div>
                             </div>
 
                             {/* Dica de Rolagem no Rodapé */}

@@ -120,7 +120,7 @@ function RestaurantRoot() {
   const { restaurantSlug = "" } = useParams();
   return (
     <RestaurantProvider key={restaurantSlug} slug={restaurantSlug}>
-      <RestaurantLayout />
+      <Outlet />
     </RestaurantProvider>
   );
 }
@@ -129,7 +129,7 @@ function PublicMenuLayout() {
   const { restaurantSlug = "" } = useParams();
   return (
     <PublicMenuProvider key={restaurantSlug} restaurantSlug={restaurantSlug}>
-      <Outlet />
+      <RestaurantLayout />
     </PublicMenuProvider>
   );
 }
@@ -349,25 +349,27 @@ export function App() {
           <Route path="produto/:productSlug" element={<ProductPage />} />
           <Route path="explorar" element={<ExplorePage />} />
         </Route>
-        <Route path="acesso" element={<Access />} />
-        <Route element={<RequireStaffAccess />}>
-          <Route path="equipe" element={<StaffServicePage />} />
-          <Route path="equipe/historico" element={<StaffHistoryPage />} />
-          <Route path="equipe/perfil" element={<StaffProfilePage />} />
-        </Route>
-
-        <Route element={<RequireStaffAccess requiredRole="admin" />}>
-          <Route path="admin" element={<AdminLayout />}>
-            <Route index element={<AdminOverview />} />
-            <Route path="catalogo" element={<AdminCatalogPage />} />
-            <Route path="identidade" element={<IdentityPage />} />
-            <Route path="mesas" element={<TablesPage />} />
-            <Route path="midias" element={<MediaMaintenancePage />} />
-            <Route path="equipe" element={<StaffManagementPage />} />
-            <Route path="*" element={<NotFound />} />
+        <Route element={<RestaurantLayout />}>
+          <Route path="acesso" element={<Access />} />
+          <Route element={<RequireStaffAccess />}>
+            <Route path="equipe" element={<StaffServicePage />} />
+            <Route path="equipe/historico" element={<StaffHistoryPage />} />
+            <Route path="equipe/perfil" element={<StaffProfilePage />} />
           </Route>
+
+          <Route element={<RequireStaffAccess requiredRole="admin" />}>
+            <Route path="admin" element={<AdminLayout />}>
+              <Route index element={<AdminOverview />} />
+              <Route path="catalogo" element={<AdminCatalogPage />} />
+              <Route path="identidade" element={<IdentityPage />} />
+              <Route path="mesas" element={<TablesPage />} />
+              <Route path="midias" element={<MediaMaintenancePage />} />
+              <Route path="equipe" element={<StaffManagementPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Route>
+          <Route path="*" element={<NotFound />} />
         </Route>
-        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );

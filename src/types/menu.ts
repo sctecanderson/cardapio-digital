@@ -54,6 +54,9 @@ export interface Product {
 
   // Informação fornecida pelo restaurante, nunca presumida.
   dietaryInformation?: string;
+
+  // Total real de curtidas públicas do produto no catálogo.
+  likesCount?: number;
 }
 
 export interface RestaurantMenu {

@@ -65,7 +65,7 @@ await assert.rejects(q('select public.validate_platform_backup_recovery($1)',[bi
 await q("select set_config('request.jwt.claim.sub',$1,false)",[actor]);
 const val=await q('select public.validate_platform_backup_recovery($1) result',[bid]);
 assert.equal(val[0].result.sourceExists,true);
-assert.equal(val[0].result.tableCount,17);
+assert.equal(val[0].result.tableCount,19);
 console.log('PASS preflight including closed tabs, expired guests, historical cancelled consumption.');
 await assert.rejects(q('select public.complete_platform_backup_recovery($1,$2)',[bid,actor]),/ainda existe/);
 await db.exec('set role authenticated');
@@ -85,9 +85,9 @@ await q('update public.platform_restaurant_backups set snapshot=$2 where id=$1',
 await db.exec('create table public.unknown_tenant_table(restaurant_id uuid)');
 await assert.rejects(q('select public.validate_platform_backup_recovery($1)',[bid]),/Atualize a recuperação/);
 await db.exec('drop table public.unknown_tenant_table');
-const tables=['restaurants','restaurant_members','restaurant_tables','menu_categories','menu_products','table_visits','guest_sessions','table_tabs','table_tab_guests','table_tab_items','service_requests','service_request_guests','guest_confirmation_codes','staff_confirmation_limits','menu_media_cleanup','restaurant_status_events','restaurant_archive_events'];
+const tables=['restaurants','restaurant_members','restaurant_tables','menu_categories','menu_products','product_likes','product_like_events','table_visits','guest_sessions','table_tabs','table_tab_guests','table_tab_items','service_requests','service_request_guests','guest_confirmation_codes','staff_confirmation_limits','menu_media_cleanup','restaurant_status_events','restaurant_archive_events'];
 await db.exec('begin');
-for(const name of ['service_request_guests','service_requests','table_tab_items','table_tab_guests','table_tabs','guest_confirmation_codes','guest_sessions','staff_confirmation_limits','table_visits','menu_products','menu_categories','menu_media_cleanup','restaurant_status_events','restaurant_archive_events','restaurant_members','restaurant_tables']){
+for(const name of ['product_like_events','product_likes','service_request_guests','service_requests','table_tab_items','table_tab_guests','table_tabs','guest_confirmation_codes','guest_sessions','staff_confirmation_limits','table_visits','menu_products','menu_categories','menu_media_cleanup','restaurant_status_events','restaurant_archive_events','restaurant_members','restaurant_tables']){
  const where=name==='guest_confirmation_codes'?`guest_session_id='${gid}'`:name==='staff_confirmation_limits'?`member_id='${mid}'`:`restaurant_id='${rid}'`;
  await db.exec(`delete from public.${name} where ${where}`);
 }

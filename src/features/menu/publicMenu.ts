@@ -1,5 +1,11 @@
 import { supabase } from '../../lib/supabase';
+import { ensureGuestIdentity } from '../auth/guestAuth';
 import type { RestaurantMenu, Product, ProductImage } from '../../types/menu';
+
+export interface ProductLikeToggleResult {
+  liked: boolean;
+  likesCount: number;
+}
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -51,6 +57,11 @@ export function parsePublicMenu(value: unknown): RestaurantMenu {
     }
     const priceInCents = integer(row.priceInCents);
     if (priceInCents < 0) throw new Error('Preço inválido no catálogo.');
+    const likesCount = row.likesCount == null ? 0 : integer(row.likesCount);
+    if (likesCount < 0) throw new Error('Contagem de curtidas inválida no catálogo.');
+    if ('user_id' in row || 'userId' in row) {
+      throw new Error('Dados privados não permitidos no catálogo público.');
+    }
     if (!Array.isArray(row.images)) throw new Error('Galeria inválida no catálogo.');
     const images: ProductImage[] = row.images.map((value) => {
       const image = record(value);
@@ -77,13 +88,68 @@ export function parsePublicMenu(value: unknown): RestaurantMenu {
       description: text(row.description), priceInCents,
       available: boolean(row.available), featured: boolean(row.featured),
       sortOrder: integer(row.sortOrder), coverImageId, images, video,
-      dietaryInformation: row.dietaryInformation == null ? undefined : text(row.dietaryInformation) };
+      dietaryInformation: row.dietaryInformation == null ? undefined : text(row.dietaryInformation),
+      likesCount };
   });
   if (new Set(products.map((product) => product.id)).size !== products.length ||
       new Set(products.map((product) => product.slug)).size !== products.length) {
     throw new Error('Produtos duplicados no catálogo.');
   }
   return { restaurantId, categories, products };
+}
+
+export function parseMyProductLikes(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error('A lista de curtidas retornada pelo servidor é inválida.');
+  }
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== 'string' || item.trim().length === 0) {
+      throw new Error('Identificador de produto inválido nas curtidas.');
+    }
+    if (!seen.has(item)) {
+      seen.add(item);
+      ids.push(item);
+    }
+  }
+  return ids;
+}
+
+export function parseToggleProductLikeResult(value: unknown): ProductLikeToggleResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('A resposta da curtida é inválida.');
+  }
+  const row = value as Record<string, unknown>;
+  if ('user_id' in row || 'userId' in row) {
+    throw new Error('Dados privados não permitidos na resposta de curtida.');
+  }
+  if (typeof row.liked !== 'boolean') {
+    throw new Error('Estado da curtida inválido.');
+  }
+  if (typeof row.likesCount !== 'number' || !Number.isSafeInteger(row.likesCount) || row.likesCount < 0) {
+    throw new Error('Contagem de curtidas inválida.');
+  }
+  return {
+    liked: row.liked,
+    likesCount: row.likesCount,
+  };
+}
+
+function mapProductLikeError(message?: string): string {
+  const clean = (message ?? '').trim();
+  if (
+    clean === 'Aguarde um momento antes de alterar sua curtida novamente.' ||
+    clean === 'Muitas interações recentes. Aguarde um minuto para continuar.' ||
+    clean === 'Este produto está temporariamente indisponível para interações.' ||
+    clean === 'Restaurante indisponível.' ||
+    clean === 'Produto não encontrado.' ||
+    clean === 'Esta operação exige uma sessão de cliente.' ||
+    clean === 'Informe o restaurante, o produto e a ação de curtida.'
+  ) {
+    return clean;
+  }
+  return 'Não foi possível atualizar sua curtida. Tente novamente.';
 }
 
 export async function getPublicMenu(restaurantSlug: string): Promise<RestaurantMenu> {
@@ -93,4 +159,51 @@ export async function getPublicMenu(restaurantSlug: string): Promise<RestaurantM
   if (error) throw new Error('Não foi possível carregar o cardápio. Tente novamente.');
   if (!data) throw new Error('O cardápio deste restaurante está indisponível.');
   return parsePublicMenu(data);
+}
+
+export async function getMyProductLikes(restaurantSlug: string): Promise<string[]> {
+  if (!restaurantSlug.trim()) return [];
+
+  // Não cria sessão anônima apenas por carregar a página e nunca substitui sessão de equipe/admin.
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !sessionData.session) {
+    return [];
+  }
+  if (!sessionData.session.user?.is_anonymous) {
+    return [];
+  }
+
+  const { data, error } = await supabase.rpc('get_my_product_likes', {
+    p_restaurant_slug: restaurantSlug,
+  });
+  if (error) {
+    throw new Error('Não foi possível carregar suas curtidas.');
+  }
+  return parseMyProductLikes(data ?? []);
+}
+
+export async function toggleProductLike(
+  restaurantSlug: string,
+  productId: string,
+  liked: boolean,
+): Promise<ProductLikeToggleResult> {
+  if (!restaurantSlug.trim() || !productId.trim() || typeof liked !== 'boolean') {
+    throw new Error('Informe o restaurante, o produto e a ação de curtida.');
+  }
+
+  // Inicia ou reutiliza a identidade anônima somente diante da ação explícita do cliente.
+  // Se houver sessão de equipe/admin conectada, ensureGuestIdentity() bloqueia sem sobrescrevê-la.
+  await ensureGuestIdentity();
+
+  const { data, error } = await supabase.rpc('toggle_product_like', {
+    p_restaurant_slug: restaurantSlug,
+    p_product_id: productId,
+    p_liked: liked,
+  });
+
+  if (error) {
+    throw new Error(mapProductLikeError(error.message));
+  }
+
+  return parseToggleProductLikeResult(data);
 }

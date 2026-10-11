@@ -19,18 +19,52 @@ function getCover(product: Product) {
     ?? null;
 }
 
-function ProductCard({ product, restaurantSlug, tableQuery }: {
+function formatLikes(count: number) {
+  const safeCount = Math.max(0, count);
+  if (safeCount >= 1000) {
+    return `${(safeCount / 1000).toFixed(1)}k`;
+  }
+  return String(safeCount);
+}
+
+function compareCatalogOrder(a: Product, b: Product): number {
+  const featuredDiff = Number(b.featured) - Number(a.featured);
+  if (featuredDiff !== 0) return featuredDiff;
+  const sortDiff = a.sortOrder - b.sortOrder;
+  if (sortDiff !== 0) return sortDiff;
+  return a.id.localeCompare(b.id);
+}
+
+function compareByLikesCountDesc(a: Product, b: Product): number {
+  const likesDiff = Math.max(0, b.likesCount ?? 0) - Math.max(0, a.likesCount ?? 0);
+  if (likesDiff !== 0) return likesDiff;
+  const sortDiff = a.sortOrder - b.sortOrder;
+  if (sortDiff !== 0) return sortDiff;
+  return a.id.localeCompare(b.id);
+}
+
+function HeartBadgeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+    </svg>
+  );
+}
+
+function ProductCard({ product, restaurantSlug, tableQuery, likesCount }: {
   product: Product;
   restaurantSlug: string;
   tableQuery: string;
+  likesCount: number;
 }) {
   const image = getCover(product);
+  const formattedLikes = formatLikes(likesCount);
 
   return (
     <Link
       to={`/${restaurantSlug}/produto/${product.slug}${tableQuery}`}
       className="home-dish-card"
-      aria-label={`${product.name}, ${currency.format(product.priceInCents / 100)}. Ver prato`}
+      aria-label={`${product.name}, ${currency.format(product.priceInCents / 100)}, ${likesCount === 1 ? '1 curtida' : `${likesCount} curtidas`}. Ver prato`}
     >
       <div className="home-dish-image-wrap">
         {image ? (
@@ -46,22 +80,18 @@ function ProductCard({ product, restaurantSlug, tableQuery }: {
             {product.name}
           </div>
         )}
-        <span className="home-dish-rating">
-          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-          {product.featured ? '4.9 (120)' : '4.8'}
+        <span className="home-dish-rating" aria-hidden="true">
+          <HeartBadgeIcon />
+          {formattedLikes}
         </span>
       </div>
       <div className="home-dish-copy">
         <div className="home-dish-title-row">
           <h3>{product.name}</h3>
           {product.featured && (
-            <span className="home-dish-inline-rating">
-              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
-              4.9 (120)
+            <span className="home-dish-inline-rating" aria-hidden="true">
+              <HeartBadgeIcon />
+              {formattedLikes}
             </span>
           )}
         </div>
@@ -101,7 +131,7 @@ export function HomePage() {
   const { restaurantSlug = '' } = useParams();
   const { restaurant } = useRestaurant();
   const table = useTableContext();
-  const { menu } = usePublicMenu();
+  const { menu, getProductLikesCount } = usePublicMenu();
   const [activeBanner, setActiveBanner] = useState(0);
   const [activeAction, setActiveAction] = useState<ServiceActionType>(null);
   const bannerRail = useRef<HTMLDivElement>(null);
@@ -112,8 +142,8 @@ export function HomePage() {
   if (!menu) return <PublicMenuStatus />;
 
   const products = [...menu.products]
-    .filter((product) => product.available)
-    .sort((a, b) => Number(b.featured) - Number(a.featured) || a.sortOrder - b.sortOrder);
+    .filter((product) => product.available && product.restaurantId === menu.restaurantId)
+    .sort(compareCatalogOrder);
   const featuredProducts = products.filter((product) => product.featured);
   const banners = (featuredProducts.length ? featuredProducts : products).slice(0, 5);
   const entryProducts = products.filter((product) => {
@@ -123,8 +153,9 @@ export function HomePage() {
   const highlights = entryProducts.length ? entryProducts.slice(0, 8) : products.slice(0, 4);
   const highlightIds = new Set(highlights.map((product) => product.id));
   const remainingProducts = products.filter((product) => !highlightIds.has(product.id));
-  // "Mais Amados" usa os produtos restantes, ou os mais bem ranqueados do catálogo se a lista for curta
-  const otherProducts = (remainingProducts.length > 0 ? remainingProducts : products).slice(0, 8);
+  // "Mais Amados" ordena por likesCount real decrescente, com desempate determinístico por sortOrder e id
+  const lovedPool = remainingProducts.length > 0 ? remainingProducts : products;
+  const otherProducts = [...lovedPool].sort(compareByLikesCountDesc).slice(0, 8);
 
   function scrollToBanner(index: number) {
     const rail = bannerRail.current;
@@ -212,7 +243,12 @@ export function HomePage() {
           <ul className="home-dish-rail" aria-label="Pratos em destaque. Deslize para os lados.">
             {highlights.map((product) => (
               <li key={product.id}>
-                <ProductCard product={product} restaurantSlug={restaurantSlug} tableQuery={tableQuery} />
+                <ProductCard
+                  product={product}
+                  restaurantSlug={restaurantSlug}
+                  tableQuery={tableQuery}
+                  likesCount={getProductLikesCount(product.id)}
+                />
               </li>
             ))}
           </ul>
@@ -229,15 +265,18 @@ export function HomePage() {
           <ul className="home-loved-rail" aria-label="Mais amados do cardápio. Deslize para os lados.">
             {otherProducts.map((product) => {
               const image = getCover(product);
+              const likesCount = getProductLikesCount(product.id);
               return (
                 <li key={product.id}>
-                  <Link to={`/${restaurantSlug}/produto/${product.slug}${tableQuery}`} className="home-loved-card" aria-label={`Ver ${product.name}`}>
+                  <Link
+                    to={`/${restaurantSlug}/produto/${product.slug}${tableQuery}`}
+                    className="home-loved-card"
+                    aria-label={`Ver ${product.name}, ${likesCount === 1 ? '1 curtida' : `${likesCount} curtidas`}`}
+                  >
                     {image ? <img src={image.url} alt={image.alt} loading="lazy" decoding="async" /> : <span aria-hidden="true" className="home-loved-placeholder" />}
-                    <span className="home-loved-rating">
-                      <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                      5.0
+                    <span className="home-loved-rating" aria-hidden="true">
+                      <HeartBadgeIcon />
+                      {formatLikes(likesCount)}
                     </span>
                   </Link>
                 </li>
