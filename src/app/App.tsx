@@ -23,6 +23,11 @@ const ProductPage = lazy(() =>
     default: m.ProductPage,
   })),
 );
+const ProductCommentsPage = lazy(() =>
+  import("../features/comments/ProductCommentsPage").then((m) => ({
+    default: m.ProductCommentsPage,
+  })),
+);
 const ExplorePage = lazy(() =>
   import("../features/explore/ExplorePage").then((m) => ({
     default: m.ExplorePage,
@@ -56,6 +61,11 @@ const StaffProfilePage = lazy(() =>
 const AdminCatalogPage = lazy(() =>
   import("../features/admin/AdminCatalogPage").then((m) => ({
     default: m.AdminCatalogPage,
+  })),
+);
+const AdminCommentsPage = lazy(() =>
+  import("../features/admin/AdminCommentsPage").then((m) => ({
+    default: m.AdminCommentsPage,
   })),
 );
 const AdminLayout = lazy(() =>
@@ -346,6 +356,7 @@ export function App() {
           <Route path="cardapio" element={<MenuPage />} />
           <Route path="comanda" element={<TabOrdersPage />} />
 
+          <Route path="produto/:productId/comentarios" element={<ProductCommentsPage />} />
           <Route path="produto/:productSlug" element={<ProductPage />} />
           <Route path="explorar" element={<ExplorePage />} />
         </Route>
@@ -361,6 +372,7 @@ export function App() {
             <Route path="admin" element={<AdminLayout />}>
               <Route index element={<AdminOverview />} />
               <Route path="catalogo" element={<AdminCatalogPage />} />
+              <Route path="comentarios" element={<AdminCommentsPage />} />
               <Route path="identidade" element={<IdentityPage />} />
               <Route path="mesas" element={<TablesPage />} />
               <Route path="midias" element={<MediaMaintenancePage />} />

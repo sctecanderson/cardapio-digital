@@ -482,11 +482,11 @@ await assert.rejects(
 await db.exec('reset role;');
 
 const [v2BackupMeta] = await q(
-  'select format_version, snapshot->>\'version\' as snap_ver, media_references from public.platform_restaurant_backups where id = $1',
+  'select format_version, snapshot->>\'version\' as snap_ver, media_references, snapshot from public.platform_restaurant_backups where id = $1',
   [v2BackupId]
 );
-assert.equal(v2BackupMeta.format_version, 2, 'format_version do novo backup deve ser 2');
-assert.equal(v2BackupMeta.snap_ver, '2', 'version no JSON do novo backup deve ser 2');
+assert.equal(v2BackupMeta.format_version, 4, 'format_version do novo backup gerado após Bloco 6.3-D1 deve ser 4');
+assert.equal(v2BackupMeta.snap_ver, '4', 'version no JSON do novo backup gerado após Bloco 6.3-D1 deve ser 4');
 assert.equal(v2BackupMeta.media_references.length, 4, 'media_references deve conter as 4 mídias registradas');
 assert.ok(
   v2BackupMeta.media_references.every((ref) => ref.kind && ref.ownerId && ref.media),
@@ -497,17 +497,33 @@ assert.ok(
 const [prepFiles] = await q('select public.prepare_platform_backup_files($1) as res', [v2BackupId]);
 assert.equal(prepFiles.res, 4, 'prepare_platform_backup_files deve inicializar os 4 arquivos de mídia (2 storage + 2 local) sem erro');
 
-// Limpar platform_backup_files temporários para seguir com o teste focado em DB snapshot/recovery
-await db.exec(`
-delete from public.platform_backup_files where backup_id = '${v2BackupId}';
-update public.platform_restaurant_backups
-set status = 'ready',
-    files_initialized_at = now(),
-    completed_at = now(),
-    snapshot_sha256 = repeat('a', 64),
-    manifest_sha256 = repeat('b', 64)
-where id = '${v2BackupId}';
-`);
+// Converter para fixture histórica v2 legítima (19 tabelas, com likes_count e sem product_comments/comments_count)
+const v2HistoricalSnapshot = structuredClone(v2BackupMeta.snapshot);
+v2HistoricalSnapshot.version = 2;
+delete v2HistoricalSnapshot.tables.product_comments;
+delete v2HistoricalSnapshot.tables.restaurant_comment_restricted_terms;
+delete v2HistoricalSnapshot.tables.product_comment_likes;
+for (const prod of v2HistoricalSnapshot.tables.menu_products) {
+  delete prod.comments_count;
+}
+
+// Limpar platform_backup_files temporários para seguir com o teste focado em DB snapshot/recovery v2
+await q(
+  `delete from public.platform_backup_files where backup_id = $1`,
+  [v2BackupId]
+);
+await q(
+  `update public.platform_restaurant_backups
+   set format_version = 2,
+       snapshot = $1,
+       status = 'ready',
+       files_initialized_at = now(),
+       completed_at = now(),
+       snapshot_sha256 = repeat('a', 64),
+       manifest_sha256 = repeat('b', 64)
+   where id = $2`,
+  [v2HistoricalSnapshot, v2BackupId]
+);
 
 // Excluir o restaurante v2
 const v2DelId = '33333333-2222-4222-8222-222222222222';
@@ -536,8 +552,9 @@ assert.equal(v2RecRes.res.recovered, true);
 assert.equal(v2RecRes.res.tableCount, 19);
 
 // Conferir que o produto recuperado mantém likes_count = 2 e os 2 registros em product_likes
-const [v2ProdAfter] = await q('select likes_count from public.menu_products where id = $1', [v2ProdId]);
+const [v2ProdAfter] = await q('select likes_count, comments_count from public.menu_products where id = $1', [v2ProdId]);
 assert.equal(v2ProdAfter.likes_count, 2, 'Prato V2 recuperado deve preservar likes_count = 2');
+assert.equal(v2ProdAfter.comments_count, 0, 'Prato V2 recuperado de backup v2 deve inicializar comments_count = 0');
 const [v2LikesAfter] = await q('select count(*) as c from public.product_likes where product_id = $1', [v2ProdId]);
 assert.equal(Number(v2LikesAfter.c), 2, 'Os 2 registros históricos de product_likes foram preservados');
 console.log('PASS: Backup v2 com curtidas reais (e identidade anônima ausente) e media_references restaurado e reconciliado com perfeição.');
@@ -576,9 +593,18 @@ set status = 'ready',
 where id = '${v1BackupId}';
 `);
 
-// Converter para snapshot v1 legítimo (format_version = 1, version = 1, sem likes_count em todos os produtos e sem as 2 novas tabelas)
+// Construir fixture histórica v2 e v1 legítimas a partir do snapshot v4 recém-capturado
 const [v1SnapRow] = await q('select snapshot from public.platform_restaurant_backups where id = $1', [v1BackupId]);
-const v1Snapshot = structuredClone(v1SnapRow.snapshot);
+const baseV2Snapshot = structuredClone(v1SnapRow.snapshot);
+baseV2Snapshot.version = 2;
+delete baseV2Snapshot.tables.product_comments;
+delete baseV2Snapshot.tables.restaurant_comment_restricted_terms;
+delete baseV2Snapshot.tables.product_comment_likes;
+for (const prod of baseV2Snapshot.tables.menu_products) {
+  delete prod.comments_count;
+}
+
+const v1Snapshot = structuredClone(baseV2Snapshot);
 v1Snapshot.version = 1;
 delete v1Snapshot.tables.product_likes;
 delete v1Snapshot.tables.product_like_events;
@@ -607,9 +633,9 @@ const [v1RecRes] = await q('select public.complete_platform_backup_recovery($1, 
 assert.equal(v1RecRes.res.recovered, true);
 assert.equal(v1RecRes.res.tableCount, 17);
 
-const v1RestoredProds = await q('select id, likes_count from public.menu_products where restaurant_id = $1', [v1RestId]);
+const v1RestoredProds = await q('select id, likes_count, comments_count from public.menu_products where restaurant_id = $1', [v1RestId]);
 assert.equal(v1RestoredProds.length, 2, 'Ambos os produtos legados restaurados');
-assert.ok(v1RestoredProds.every(p => p.likes_count === 0), 'Todos os produtos legados receberam likes_count = 0');
+assert.ok(v1RestoredProds.every(p => p.likes_count === 0 && p.comments_count === 0), 'Todos os produtos legados receberam likes_count = 0 e comments_count = 0');
 
 // Testar staging de backup v1 SEM PRODUTOS
 const v1EmptyProdsSnap = structuredClone(v1Snapshot);
@@ -620,13 +646,13 @@ assert.equal(v1EmptyStage.res.tableCount, 17);
 console.log('PASS: Backups legados v1 (com múltiplos produtos e sem produtos) validados e restaurados com sucesso.');
 
 // ============================================================================
-// TESTE 8: REJEIÇÃO DE SNAPSHOT NOVO ADULTERADO (v2 sem tabelas ou sem likes_count)
+// TESTE 8: REJEIÇÃO DE SNAPSHOT ADULTERADO (v2 sem tabelas ou sem likes_count)
 // ============================================================================
-console.log('\n--- Teste 8: Rejeição de Snapshots Novos (v2) Adulterados ---');
+console.log('\n--- Teste 8: Rejeição de Snapshots (v2) Adulterados ---');
 const tamperedId = '44444444-4444-4444-8444-444444444444';
 
 // 8.1 Snapshot v2 que teve product_likes removida para tentar se passar por legado
-const tamperedV2Snap = structuredClone(v1SnapRow.snapshot);
+const tamperedV2Snap = structuredClone(baseV2Snapshot);
 delete tamperedV2Snap.tables.product_likes;
 
 await db.exec(`
@@ -646,7 +672,7 @@ await assert.rejects(
 );
 
 // 8.2 Snapshot v2 com todas as tabelas, mas onde o 2º produto omitiu likes_count
-const tamperedProdV2Snap = structuredClone(v1SnapRow.snapshot);
+const tamperedProdV2Snap = structuredClone(baseV2Snapshot);
 delete tamperedProdV2Snap.tables.menu_products[1].likes_count;
 await q(`update public.platform_restaurant_backups set snapshot = $1 where id = $2`, [tamperedProdV2Snap, tamperedId]);
 

@@ -5,7 +5,19 @@ import {
     type KeyboardEvent,
     type PointerEvent,
 } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
+import {
+    ProductCommentsPopover,
+    getSavedProductCommentDraft,
+    saveProductCommentDraft,
+    type ProductCommentDraft,
+    type ProductCommentsCloseReason,
+} from '../comments/ProductCommentsPopover';
+import {
+    clearExploreNavigationState,
+    getExploreNavigationState,
+    saveExploreNavigationState,
+} from '../comments/exploreNavigation';
 import { usePublicMenu, PublicMenuStatus } from '../menu/PublicMenuProvider';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
 import { useTableContext } from '../tables/useTableContext';
@@ -58,7 +70,7 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
     if (!(target instanceof Element)) return false;
     return Boolean(
         target.closest(
-            'button, a, header, aside, .explore-product-info, .explore-reels-progress, .explore-like-toast',
+            'button, a, header, aside, .explore-product-info, .explore-reels-progress, .explore-like-toast, .product-comments-popover',
         ),
     );
 }
@@ -98,13 +110,18 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
     const tableQuery = table.status === 'unverified'
         ? `?mesa=${table.tableNumber}`
         : '';
+    const screenRef = useRef<HTMLElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const commentButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
     const activeIndexRef = useRef(0);
     const pointerStartRef = useRef<PointerStartState | null>(null);
     const lastTapRef = useRef<LastTapState | null>(null);
+    const suppressNextSlideTapRef = useRef(false);
     const singleTapTimerRef = useRef<number | null>(null);
     const burstTimerRef = useRef<number | null>(null);
     const playbackTimerRef = useRef<number | null>(null);
+
+    const navigate = useNavigate();
 
     const [activeIndex, setActiveIndex] = useState(0);
     const [activeSlidePaused, setActiveSlidePaused] = useState(false);
@@ -116,6 +133,11 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
     failedVideoUrlsRef.current = failedVideoUrls;
 
     const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+    const [commentsOpenProductId, setCommentsOpenProductId] = useState<string | null>(null);
+    const commentsOpenProductIdRef = useRef<string | null>(null);
+    commentsOpenProductIdRef.current = commentsOpenProductId;
+
+    const [commentDrafts, setCommentDrafts] = useState<Record<string, ProductCommentDraft>>({});
     const [burstProductId, setBurstProductId] = useState<string | null>(null);
     const [playbackFeedback, setPlaybackFeedback] = useState<PlaybackFeedbackState | null>(null);
 
@@ -125,6 +147,7 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         isProductLiked,
         isProductLikePending,
         getProductLikesCount,
+        getProductCommentsCount,
         likeProduct,
         toggleProductLike,
         likeError,
@@ -152,10 +175,62 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         lastTapRef.current = null;
     }
 
+    function handleCommentDraftChange(productId: string, draft: ProductCommentDraft) {
+        saveProductCommentDraft(productId, draft, restaurantSlug);
+        setCommentDrafts((prev) => {
+            const current = prev[productId];
+            if (
+                current &&
+                current.authorName === draft.authorName &&
+                current.body === draft.body
+            ) {
+                return prev;
+            }
+            return {
+                ...prev,
+                [productId]: draft,
+            };
+        });
+    }
+
+    function closeCommentsPopover(reason?: ProductCommentsCloseReason) {
+        if (commentsOpenProductIdRef.current === null) return;
+        if (reason === 'outside') {
+            suppressNextSlideTapRef.current = true;
+            clearGestureTracking();
+        }
+        commentsOpenProductIdRef.current = null;
+        setCommentsOpenProductId(null);
+    }
+
+    function toggleCommentsPopover(productId: string) {
+        suppressNextSlideTapRef.current = false;
+        clearGestureTracking();
+        if (commentsOpenProductIdRef.current === productId) {
+            commentsOpenProductIdRef.current = null;
+            setCommentsOpenProductId(null);
+            return;
+        }
+        setCommentDrafts((prev) => {
+            if (prev[productId]) return prev;
+            return {
+                ...prev,
+                [productId]: getSavedProductCommentDraft(productId, restaurantSlug),
+            };
+        });
+        commentsOpenProductIdRef.current = productId;
+        setCommentsOpenProductId(productId);
+    }
+
     function activateSlide(nextIndex: number) {
         if (activeIndexRef.current === nextIndex) return;
         activeIndexRef.current = nextIndex;
+        suppressNextSlideTapRef.current = false;
         clearGestureTracking();
+        if (commentsOpenProductIdRef.current !== null) {
+            commentsOpenProductIdRef.current = null;
+            setCommentsOpenProductId(null);
+        }
         activeSlidePausedRef.current = false;
         setActiveIndex(nextIndex);
         setActiveSlidePaused(false);
@@ -163,6 +238,7 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
     }
 
     function handleFeedScroll() {
+        suppressNextSlideTapRef.current = false;
         clearGestureTracking();
         const container = containerRef.current;
         if (!container || container.clientHeight <= 0) return;
@@ -219,15 +295,53 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         const container = containerRef.current;
         if (!container) return;
 
-        activeIndexRef.current = 0;
+        // Verifica se há estado salvo de retorno do "Ver todos os comentários"
+        const navState = getExploreNavigationState(restaurantSlug);
+        let initialIndex = 0;
+        let initialPaused = false;
+
+        if (navState && navState.fromExplore) {
+            clearExploreNavigationState(restaurantSlug);
+            if (navState.returnProductId) {
+                const foundIndex = productsRef.current.findIndex(
+                    (p) => p.id === navState.returnProductId,
+                );
+                if (foundIndex >= 0) {
+                    initialIndex = foundIndex;
+                }
+            } else if (
+                typeof navState.returnIndex === 'number' &&
+                navState.returnIndex >= 0 &&
+                navState.returnIndex < productsRef.current.length
+            ) {
+                initialIndex = navState.returnIndex;
+            }
+            initialPaused = Boolean(navState.returnPaused);
+        }
+
+        activeIndexRef.current = initialIndex;
+        suppressNextSlideTapRef.current = false;
         clearPendingSingleTap();
         pointerStartRef.current = null;
         lastTapRef.current = null;
-        activeSlidePausedRef.current = false;
-        setActiveIndex(0);
-        setActiveSlidePaused(false);
+        commentsOpenProductIdRef.current = null;
+        setCommentsOpenProductId(null);
+        activeSlidePausedRef.current = initialPaused;
+        setActiveIndex(initialIndex);
+        setActiveSlidePaused(initialPaused);
         setPlaybackFeedback(null);
-        container.scrollTop = 0;
+
+        if (initialIndex > 0) {
+            // Rola diretamente para o slide restaurado
+            window.requestAnimationFrame(() => {
+                if (container && container.clientHeight > 0) {
+                    container.scrollTop = initialIndex * container.clientHeight;
+                }
+            });
+        } else {
+            container.scrollTop = 0;
+        }
+
         const observer = new IntersectionObserver(
             (entries) => {
                 const visible = entries
@@ -245,7 +359,7 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
 
         Array.from(container.children).forEach((slide) => observer.observe(slide));
         return () => observer.disconnect();
-    }, [hasMenu, productIds]);
+    }, [hasMenu, productIds, restaurantSlug]);
 
     function productHasPlayableVideo(productId: string): boolean {
         const targetProduct = productsRef.current.find((item) => item.id === productId);
@@ -290,7 +404,12 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         const target = container?.children.item(index);
         if (!container || !(target instanceof HTMLElement)) return;
 
+        suppressNextSlideTapRef.current = false;
         clearGestureTracking();
+        if (index !== activeIndexRef.current && commentsOpenProductIdRef.current !== null) {
+            commentsOpenProductIdRef.current = null;
+            setCommentsOpenProductId(null);
+        }
 
         const activeElement = document.activeElement;
         if (
@@ -320,6 +439,9 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                 event.key === 'K') &&
             !isPlaybackKeyIgnoredTarget(event.target)
         ) {
+            if (commentsOpenProductIdRef.current !== null) {
+                return;
+            }
             const currentActiveProduct = productsRef.current[activeIndexRef.current];
             if (currentActiveProduct && productHasPlayableVideo(currentActiveProduct.id)) {
                 event.preventDefault();
@@ -380,7 +502,12 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
 
     function handleSlidePointerDown(productId: string, event: PointerEvent<HTMLElement>) {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
-        if (isInteractiveTarget(event.target)) {
+        if (suppressNextSlideTapRef.current) {
+            suppressNextSlideTapRef.current = false;
+            clearGestureTracking();
+            return;
+        }
+        if (commentsOpenProductIdRef.current !== null || isInteractiveTarget(event.target)) {
             pointerStartRef.current = null;
             return;
         }
@@ -409,6 +536,16 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         hasPlayableVideo: boolean,
         event: PointerEvent<HTMLElement>,
     ) {
+        if (suppressNextSlideTapRef.current) {
+            suppressNextSlideTapRef.current = false;
+            clearGestureTracking();
+            return;
+        }
+        if (commentsOpenProductIdRef.current !== null) {
+            clearGestureTracking();
+            return;
+        }
+
         const start = pointerStartRef.current;
         pointerStartRef.current = null;
 
@@ -462,6 +599,7 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
     }
 
     function handleSlidePointerCancel() {
+        suppressNextSlideTapRef.current = false;
         clearGestureTracking();
     }
 
@@ -499,8 +637,15 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         );
     }
 
+    const activeProduct = products[activeIndex] ?? null;
+    const activeCommentsProductId =
+        activeProduct && commentsOpenProductId === activeProduct.id
+            ? activeProduct.id
+            : null;
+
     return (
         <section
+            ref={screenRef}
             className="explore-screen"
             aria-label="Explorar os produtos"
             onKeyDown={handleScreenKeyDown}
@@ -553,11 +698,17 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                     const isLiked = isProductLiked(product.id);
                     const isLikePending = isProductLikePending(product.id);
                     const currentLikes = getProductLikesCount(product.id);
+                    const currentComments = getProductCommentsCount(product.id);
+                    const isCommentsOpenForSlide =
+                        index === activeIndex && commentsOpenProductId === product.id;
                     const showBurst = burstProductId === product.id;
                     const videoUrl = product.video?.url ?? null;
                     const hasPlayableVideo =
                         videoUrl !== null && failedVideoUrls[product.id] !== videoUrl;
-                    const isSlidePaused = index === activeIndex ? activeSlidePaused : true;
+                    const isSlidePaused =
+                        index === activeIndex
+                            ? activeSlidePaused || isCommentsOpenForSlide
+                            : true;
                     const showPlaybackFeedback =
                         hasPlayableVideo &&
                         playbackFeedback !== null &&
@@ -675,6 +826,34 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                                         <span className="explore-action-label">{formatLikes(currentLikes)}</span>
                                     </button>
 
+                                    {/* Botão Comentários */}
+                                    <button
+                                        ref={(node) => {
+                                            commentButtonRefs.current[product.id] = node;
+                                        }}
+                                        type="button"
+                                        className={`explore-action-item explore-comment-btn ${isCommentsOpenForSlide ? 'active' : ''}`}
+                                        onClick={() => toggleCommentsPopover(product.id)}
+                                        aria-label={
+                                            isCommentsOpenForSlide
+                                                ? `Fechar comentários de ${product.name} (${currentComments} comentários)`
+                                                : `Ver comentários de ${product.name} (${currentComments} comentários)`
+                                        }
+                                        aria-expanded={isCommentsOpenForSlide}
+                                        aria-haspopup="dialog"
+                                    >
+                                        <div className="explore-action-icon">
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="currentColor"
+                                                aria-hidden="true"
+                                            >
+                                                <path d="M12 3C6.48 3 2 6.58 2 11c0 2.54 1.48 4.8 3.8 6.26L4.5 21l4.38-1.95c1 .23 2.04.35 3.12.35 5.52 0 10-3.58 10-8.4S17.52 3 12 3z" />
+                                            </svg>
+                                        </div>
+                                        <span className="explore-action-label">{formatLikes(currentComments)}</span>
+                                    </button>
+
                                     {/* Compartilhar */}
                                     <button
                                         type="button"
@@ -694,7 +873,15 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                                 <button
                                     type="button"
                                     className={`explore-action-item explore-plus-btn ${actionsMenuOpen ? 'active' : ''}`}
-                                    onClick={() => setActionsMenuOpen((prev) => !prev)}
+                                    onClick={() => {
+                                        setActionsMenuOpen((prev) => {
+                                            const next = !prev;
+                                            if (!next) {
+                                                closeCommentsPopover();
+                                            }
+                                            return next;
+                                        });
+                                    }}
                                     aria-label={actionsMenuOpen ? 'Recolher menu de ações' : 'Expandir menu de ações'}
                                     aria-expanded={actionsMenuOpen}
                                 >
@@ -754,6 +941,40 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                     );
                 })}
             </div>
+
+            {activeProduct && (
+                <ProductCommentsPopover
+                    productId={activeProduct.id}
+                    productName={activeProduct.name}
+                    restaurantSlug={restaurantSlug}
+                    open={activeCommentsProductId === activeProduct.id}
+                    onClose={closeCommentsPopover}
+                    onOpenFullPage={() => {
+                        saveExploreNavigationState(restaurantSlug, {
+                            fromExplore: true,
+                            returnIndex: activeIndex,
+                            returnProductId: activeProduct.id,
+                            returnPaused: activeSlidePausedRef.current,
+                        });
+                        closeCommentsPopover();
+                        navigate(`/${restaurantSlug}/produto/${activeProduct.id}/comentarios${tableQuery}`, {
+                            state: {
+                                fromExplore: true,
+                                returnIndex: activeIndex,
+                                returnProductId: activeProduct.id,
+                                returnPaused: activeSlidePausedRef.current,
+                            },
+                        });
+                    }}
+                    anchorEl={commentButtonRefs.current[activeProduct.id] ?? null}
+                    boundaryRef={screenRef}
+                    draft={
+                        commentDrafts[activeProduct.id] ??
+                        getSavedProductCommentDraft(activeProduct.id, restaurantSlug)
+                    }
+                    onDraftChange={handleCommentDraftChange}
+                />
+            )}
 
             <span className="sr-only" role="status" aria-live="polite">
                 Produto {activeIndex + 1} de {products.length}

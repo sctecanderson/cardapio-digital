@@ -4560,4 +4560,915 @@ footer a {
     background: #fef2f2;
     border-color: #b91c1c;
     color: #b91c1c;
+}
+
+/* ==========================================================================
+   Balão Flutuante Compacto de Comentários (ProductCommentsPopover - Bloco 6.3-B2/B3)
+   ========================================================================== */
+
+.explore-comment-btn {
+    border-radius: 10px;
+}
+
+.explore-comment-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.9);
+    outline-offset: 2px;
+}
+
+.explore-comment-btn.active {
+    color: #f6e7d5;
+}
+
+.explore-comment-btn.active .explore-action-icon {
+    transform: scale(1.1);
+}
+
+.product-comments-popover {
+    --popover-arrow-offset: 34px;
+    position: absolute;
+    z-index: 42;
+    display: flex;
+    flex-direction: column;
+    width: min(304px, calc(100vw - 78px));
+    max-height: min(388px, calc(100dvh - 96px));
+    border-radius: 18px;
+    background: rgba(251, 247, 241, 0.97);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(214, 199, 183, 0.92);
+    box-shadow:
+        0 18px 42px rgba(22, 14, 9, 0.34),
+        0 3px 10px rgba(22, 14, 9, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    color: var(--ink, #2b1d17);
+    font-family: 'Lato', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    overflow: visible;
+    animation: product-comments-popover-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transform-origin: right top;
+}
+
+.product-comments-popover.is-fallback-position {
+    right: 68px;
+    top: calc(36% - 16px);
+}
+
+/* Pontinha triangular conectada ao botão acionador */
+.product-comments-popover-arrow {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: rgba(251, 247, 241, 0.98);
+    pointer-events: none;
+}
+
+.product-comments-popover-arrow.arrow-right {
+    right: -6.5px;
+    top: var(--popover-arrow-offset, 34px);
+    transform: translateY(-50%) rotate(45deg);
+    border-top: 1px solid rgba(214, 199, 183, 0.92);
+    border-right: 1px solid rgba(214, 199, 183, 0.92);
+    border-radius: 0 3px 0 0;
+    box-shadow: 3px -2px 6px rgba(22, 14, 9, 0.08);
+}
+
+.product-comments-popover-arrow.arrow-top {
+    top: -6.5px;
+    left: var(--popover-arrow-offset, 140px);
+    transform: translateX(-50%) rotate(45deg);
+    border-top: 1px solid rgba(214, 199, 183, 0.92);
+    border-left: 1px solid rgba(214, 199, 183, 0.92);
+    border-radius: 3px 0 0 0;
+}
+
+.product-comments-popover-arrow.arrow-bottom {
+    bottom: -6.5px;
+    left: var(--popover-arrow-offset, 140px);
+    transform: translateX(-50%) rotate(45deg);
+    border-bottom: 1px solid rgba(214, 199, 183, 0.92);
+    border-right: 1px solid rgba(214, 199, 183, 0.92);
+    border-radius: 0 0 3px 0;
+}
+
+/* 1. Cabeçalho discreto */
+.product-comments-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 11px 13px 9px;
+    border-bottom: 1px solid rgba(219, 206, 191, 0.72);
+    flex-shrink: 0;
+}
+
+.product-comments-title-group {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.product-comments-title {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--ink, #2b1d17);
+    line-height: 1.2;
+}
+
+.product-comments-count-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 19px;
+    padding: 0 6.5px;
+    border-radius: 999px;
+    background: #efe7dc;
+    border: 1px solid rgba(205, 188, 170, 0.75);
+    color: #5c493b;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.product-comments-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.product-comments-view-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    border: 1px solid rgba(198, 179, 159, 0.85);
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--brand, #b9472b);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.product-comments-view-all-btn:hover {
+    background: #f4ebdf;
+    border-color: var(--brand, #b9472b);
+    transform: translateY(-0.5px);
+}
+
+.product-comments-view-all-btn:focus-visible {
+    outline: 2px solid var(--brand, #b9472b);
+    outline-offset: 1px;
+}
+
+.product-comments-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid rgba(210, 195, 179, 0.75);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.75);
+    color: #635143;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.product-comments-close-btn:hover {
+    background: #f1e8dc;
+    border-color: #c6b39f;
+    color: var(--ink, #2b1d17);
+}
+
+.product-comments-close-btn:focus-visible {
+    outline: 2px solid #7c6452;
+    outline-offset: 2px;
+}
+
+/* 2. Lista de comentários aprovados (scroll interno exclusivo) */
+.product-comments-list {
+    flex: 1 1 auto;
+    min-height: 88px;
+    max-height: 190px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 9px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #c8b8a7 transparent;
+}
+
+.product-comments-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.product-comments-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.product-comments-list::-webkit-scrollbar-thumb {
+    background: #ccbba9;
+    border-radius: 999px;
+}
+
+.product-comments-items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.product-comments-item {
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(226, 214, 200, 0.85);
+}
+
+.product-comments-item-meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 3px;
+}
+
+.product-comments-item-author {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink, #2b1d17);
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.product-comments-item-date {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: #8c7a6b;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.product-comments-item-body {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #433227;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.product-comments-item-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.product-comment-like-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    padding: 2px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #8c7a6b;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    transition: color 0.15s ease, transform 0.1s ease;
+}
+
+.product-comment-like-btn:hover:not(:disabled) {
+    color: var(--brand, #b9472b);
+}
+
+.product-comment-like-btn.is-liked {
+    color: var(--brand, #b9472b);
+}
+
+.product-comment-like-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.product-comment-like-icon {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+}
+
+.product-comment-like-btn.is-liked .product-comment-like-icon {
+    color: var(--brand, #b9472b);
+}
+
+.product-comment-like-count {
+    min-width: 6px;
+    font-size: 11px;
+}
+
+/* Estados de carregamento, vazio, erro e paginação */
+.product-comments-state,
+.product-comments-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 82px;
+    padding: 10px 8px;
+    gap: 6px;
+    color: #786658;
+    font-size: 12px;
+}
+
+.product-comments-state.is-error p {
+    margin: 0;
+    color: #8f2d22;
+    font-size: 11.5px;
+    line-height: 1.35;
+}
+
+.product-comments-empty-title {
+    margin: 0;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #4a392d;
+}
+
+.product-comments-empty-sub {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: #857365;
+    max-width: 230px;
+}
+
+.product-comments-spinner {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(124, 100, 82, 0.24);
+    border-top-color: #6b5341;
+    animation: product-comments-spin 0.75s linear infinite;
+}
+
+.product-comments-more-wrap {
+    display: flex;
+    justify-content: center;
+    padding-top: 8px;
+}
+
+.product-comments-more-btn,
+.product-comments-retry-btn {
+    border: 1px solid rgba(196, 179, 162, 0.9);
+    background: rgba(255, 255, 255, 0.82);
+    color: #554234;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.product-comments-more-btn:hover:not(:disabled),
+.product-comments-retry-btn:hover:not(:disabled) {
+    background: #f2e9de;
+    border-color: #b59f89;
+}
+
+.product-comments-more-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.product-comments-inline-error {
+    margin-top: 8px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background: #fdf2f0;
+    border: 1px solid rgba(176, 58, 46, 0.25);
+    color: #8f2d22;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* 3. Formulário compacto no rodapé */
+.product-comments-form {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 9px 12px 11px;
+    border-top: 1px solid rgba(219, 206, 191, 0.78);
+    background: rgba(246, 239, 230, 0.72);
+    border-radius: 0 0 18px 18px;
+}
+
+.product-comments-feedback {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 6px 9px;
+    border-radius: 10px;
+    font-size: 11px;
+    line-height: 1.35;
+    font-weight: 600;
+}
+
+.product-comments-feedback.is-pending-moderation {
+    background: #eef6ee;
+    border: 1px solid rgba(49, 112, 62, 0.26);
+    color: #23572e;
+}
+
+.product-comments-feedback.is-approved {
+    background: #f4faee;
+    border: 1px solid rgba(68, 138, 54, 0.28);
+    color: #2b611e;
+}
+
+.product-comments-feedback.is-error {
+    background: #fdf1ef;
+    border: 1px solid rgba(176, 58, 46, 0.28);
+    color: #8f2d22;
+}
+
+.product-comments-feedback-dismiss {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+    opacity: 0.75;
+    flex-shrink: 0;
+}
+
+.product-comments-feedback-dismiss:hover {
+    opacity: 1;
+}
+
+.product-comments-field-row {
+    display: flex;
+}
+
+.product-comments-name-input,
+.product-comments-body-input {
+    width: 100%;
+    border: 1px solid rgba(208, 193, 176, 0.95);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--ink, #2b1d17);
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.35;
+    outline: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.product-comments-name-input {
+    min-height: 31px;
+    padding: 5px 10px;
+}
+
+.product-comments-body-input {
+    resize: none;
+    min-height: 46px;
+    max-height: 76px;
+    padding: 6px 10px;
+}
+
+.product-comments-name-input::placeholder,
+.product-comments-body-input::placeholder {
+    color: #9a8879;
+}
+
+.product-comments-name-input:focus,
+.product-comments-body-input:focus {
+    border-color: #8c725d;
+    background: #ffffff;
+}
+
+.product-comments-name-input:disabled,
+.product-comments-body-input:disabled {
+    opacity: 0.65;
+    background: #f4eee6;
+}
+
+.product-comments-compose-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.product-comments-compose-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.product-comments-char-counter {
+    font-size: 10.5px;
+    color: #8c7a6b;
+    font-variant-numeric: tabular-nums;
+}
+
+.product-comments-char-counter.is-near-limit {
+    color: #9a4a24;
+    font-weight: 700;
+}
+
+.product-comments-submit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 29px;
+    padding: 0 13px;
+    border-radius: 999px;
+    border: 1px solid #4a382c;
+    background: #4a382c;
+    color: #fffaf4;
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.product-comments-submit-btn:hover:not(:disabled) {
+    background: #38291f;
+    border-color: #38291f;
+}
+
+.product-comments-submit-btn:focus-visible {
+    outline: 2px solid #4a382c;
+    outline-offset: 2px;
+}
+
+.product-comments-submit-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+@keyframes product-comments-popover-enter {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateX(4px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateX(0);
+    }
+}
+
+@keyframes product-comments-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ==========================================================================
+   Tela Completa de Comentários (ProductCommentsPage)
+   ========================================================================== */
+.product-comments-full-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    background: var(--page, #f7f2ea);
+    color: var(--ink, #2b1d17);
+    font-family: 'Lato', sans-serif;
+    position: relative;
+    max-width: 640px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.product-comments-full-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+    background: rgba(247, 242, 234, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(219, 206, 191, 0.78);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+
+.product-comments-full-back-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(210, 195, 179, 0.85);
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--ink, #2b1d17);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.product-comments-full-back-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.product-comments-full-back-btn:hover {
+    background: #f1e6d7;
+    transform: translateX(-1px);
+}
+
+.product-comments-full-back-btn:focus-visible {
+    outline: 2px solid var(--brand, #b9472b);
+    outline-offset: 2px;
+}
+
+.product-comments-full-title-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.product-comments-full-title {
+    margin: 0;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--ink, #2b1d17);
+}
+
+.product-comments-full-subtitle {
+    font-size: 12px;
+    font-weight: 500;
+    color: #7b6757;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.product-comments-full-count-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 9999px;
+    background: rgba(185, 71, 43, 0.12);
+    color: var(--brand, #b9472b);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.product-comments-full-body {
+    flex: 1 1 auto;
+    padding: 16px 16px 140px;
+    display: flex;
+    flex-direction: column;
+}
+
+.product-comments-full-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.product-comments-full-page .product-comments-item {
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(226, 214, 200, 0.88);
+    box-shadow: 0 2px 8px rgba(78, 52, 33, 0.04);
+}
+
+.product-comments-full-page .product-comments-item-author {
+    font-size: 13px;
+}
+
+.product-comments-full-page .product-comments-item-date {
+    font-size: 11px;
+}
+
+.product-comments-full-page .product-comments-item-body {
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.product-comments-full-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    max-width: 640px;
+    margin: 0 auto;
+    background: rgba(247, 242, 234, 0.98);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(219, 206, 191, 0.85);
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -4px 16px rgba(50, 32, 20, 0.08);
+}
+
+.product-comments-full-footer .product-comments-form {
+    background: transparent;
+    border-top: none;
+    padding: 0;
+}
+
+@media (max-width: 380px) {
+    .product-comments-popover {
+        width: min(272px, calc(100vw - 72px));
+    }
+
+    .product-comments-header {
+        padding: 9px 11px 8px;
+    }
+
+    .product-comments-list {
+        padding: 8px 10px;
+        max-height: 164px;
+    }
+
+    .product-comments-form {
+        padding: 8px 10px 10px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .product-comments-popover {
+        animation: none;
+    }
+
+    .product-comments-spinner {
+        animation: none;
+    }
+
+    .product-comments-close-btn,
+    .product-comments-more-btn,
+    .product-comments-retry-btn,
+    .product-comments-name-input,
+    .product-comments-body-input,
+    .product-comments-submit-btn {
+        transition: none;
+    }
+}
+
+/* Painel Administrativo de Comentários e Moderação */
+.admin-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.admin-badge-pending {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+.admin-badge-approved {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.admin-badge-hidden {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.admin-badge-rejected {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.admin-stat-active {
+    outline: 2px solid var(--brand);
+    outline-offset: -1px;
+}
+
+.admin-filter-pill {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid #ded7cd;
+    background: #fff;
+    color: #554940;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.admin-filter-pill:hover {
+    background: #f8f4ee;
+    border-color: #cbbeaf;
+}
+
+.admin-filter-pill.active {
+    background: #3c2f27;
+    color: #fff;
+    border-color: #3c2f27;
+}
+
+.admin-btn-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.admin-btn-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.admin-btn-action.btn-approve {
+    background: #ecfdf5;
+    color: #065f46;
+    border-color: #a7f3d0;
+}
+
+.admin-btn-action.btn-approve:hover:not(:disabled) {
+    background: #d1fae5;
+}
+
+.admin-btn-action.btn-reject {
+    background: #fef2f2;
+    color: #991b1b;
+    border-color: #fecaca;
+}
+
+.admin-btn-action.btn-reject:hover:not(:disabled) {
+    background: #fee2e2;
+}
+
+.admin-btn-action.btn-hide {
+    background: #f8fafc;
+    color: #475569;
+    border-color: #cbd5e1;
+}
+
+.admin-btn-action.btn-hide:hover:not(:disabled) {
+    background: #f1f5f9;
+}
+
+.admin-btn-action.btn-delete {
+    background: transparent;
+    color: #b91c1c;
+    border-color: transparent;
+}
+
+.admin-btn-action.btn-delete:hover:not(:disabled) {
+    background: #fee2e2;
 }

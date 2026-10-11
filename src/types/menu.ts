@@ -57,6 +57,45 @@ export interface Product {
 
   // Total real de curtidas públicas do produto no catálogo.
   likesCount?: number;
+
+  // Total real de comentários públicos aprovados do produto no catálogo.
+  commentsCount?: number;
+}
+
+export interface PublicProductComment {
+  id: string;
+  productId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+  likesCount: number;
+}
+
+export interface ProductCommentsCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface PublicProductCommentsPage {
+  items: PublicProductComment[];
+  hasMore: boolean;
+  nextCursor: ProductCommentsCursor | null;
+}
+
+export interface CreatedProductCommentResult {
+  id: string;
+  productId: string;
+  authorName: string;
+  body: string;
+  status: 'approved' | 'pending';
+  createdAt: string;
+  likesCount: number;
+}
+
+export interface ToggleProductCommentLikeResult {
+  commentId: string;
+  liked: boolean;
+  likesCount: number;
 }
 
 export interface RestaurantMenu {

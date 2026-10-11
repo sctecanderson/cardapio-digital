@@ -1,10 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { supabase } from '../../lib/supabase';
-import type { RestaurantMenu } from '../../types/menu';
+import type {
+  CreatedProductCommentResult,
+  ProductCommentsCursor,
+  PublicProductCommentsPage,
+  RestaurantMenu,
+} from '../../types/menu';
 import {
+  createProductComment as executeCreateProductComment,
   getMyProductLikes,
   getPublicMenu,
+  getPublicProductComments as executeGetPublicProductComments,
   toggleProductLike as executeToggleProductLike,
 } from './publicMenu';
 
@@ -39,6 +46,20 @@ export interface CatalogContext {
   likeProduct: (productId: string) => Promise<boolean>;
   unlikeProduct: (productId: string) => Promise<boolean>;
   toggleProductLike: (productId: string) => Promise<boolean>;
+  pendingCommentProductIds: ReadonlySet<string>;
+  isProductCommentSubmitting: (productId: string) => boolean;
+  getProductCommentsCount: (productId: string) => number;
+  commentError: string;
+  clearCommentError: () => void;
+  loadProductComments: (
+    productId: string,
+    options?: { cursor?: ProductCommentsCursor | null; limit?: number },
+  ) => Promise<PublicProductCommentsPage>;
+  submitProductComment: (
+    productId: string,
+    authorName: string,
+    body: string,
+  ) => Promise<CreatedProductCommentResult>;
 }
 
 const MenuContext = createContext<CatalogContext | null>(null);
@@ -53,6 +74,7 @@ function mergeMenuWithLikesState(
     ...serverMenu,
     products: serverMenu.products.map((product) => {
       const serverCount = Math.max(0, product.likesCount ?? 0);
+      const safeCommentsCount = Math.max(0, product.commentsCount ?? 0);
       const confirmed = confirmedMap.get(product.id);
       const effectiveServerCount =
         confirmed && confirmed.confirmSeq > loadStartMutationSeq
@@ -69,11 +91,13 @@ function mergeMenuWithLikesState(
         return {
           ...product,
           likesCount: Math.max(0, inFlight.optimisticCount),
+          commentsCount: safeCommentsCount,
         };
       }
       return {
         ...product,
         likesCount: Math.max(0, effectiveServerCount),
+        commentsCount: safeCommentsCount,
       };
     }),
   };
@@ -90,11 +114,14 @@ export function PublicMenuProvider({ restaurantSlug, children }: {
   const [likedProductIds, setLikedProductIds] = useState<ReadonlySet<string>>(EMPTY_SET);
   const [pendingLikeProductIds, setPendingLikeProductIds] = useState<ReadonlySet<string>>(EMPTY_SET);
   const [likeError, setLikeError] = useState('');
+  const [pendingCommentProductIds, setPendingCommentProductIds] = useState<ReadonlySet<string>>(EMPTY_SET);
+  const [commentError, setCommentError] = useState('');
 
   const menuRef = useRef<RestaurantMenu | null>(null);
   const likedProductIdsRef = useRef<ReadonlySet<string>>(EMPTY_SET);
   const inFlightByProductRef = useRef<Map<string, InFlightLikeMutation>>(new Map());
   const confirmedLikesByProductRef = useRef<Map<string, ConfirmedProductLikeState>>(new Map());
+  const inFlightCommentByProductRef = useRef<Set<string>>(new Set());
   const disposedRef = useRef(false);
   const contextEpochRef = useRef(0);
   const requestSeqRef = useRef(0);
@@ -118,6 +145,11 @@ export function PublicMenuProvider({ restaurantSlug, children }: {
   const syncPendingSet = useCallback(() => {
     const keys = Array.from(inFlightByProductRef.current.keys());
     setPendingLikeProductIds(keys.length === 0 ? EMPTY_SET : new Set(keys));
+  }, []);
+
+  const syncPendingCommentsSet = useCallback(() => {
+    const keys = Array.from(inFlightCommentByProductRef.current.values());
+    setPendingCommentProductIds(keys.length === 0 ? EMPTY_SET : new Set(keys));
   }, []);
 
   const loadMyLikes = useCallback(async (slug: string, epoch: number) => {
@@ -165,9 +197,12 @@ export function PublicMenuProvider({ restaurantSlug, children }: {
     const epoch = ++contextEpochRef.current;
     inFlightByProductRef.current.clear();
     confirmedLikesByProductRef.current.clear();
+    inFlightCommentByProductRef.current.clear();
     syncPendingSet();
+    syncPendingCommentsSet();
     updateLikedProductIds(EMPTY_SET);
     setLikeError('');
+    setCommentError('');
 
     let pendingCatalog = false;
 
@@ -225,16 +260,19 @@ export function PublicMenuProvider({ restaurantSlug, children }: {
         const nextEpoch = ++contextEpochRef.current;
         inFlightByProductRef.current.clear();
         confirmedLikesByProductRef.current.clear();
+        inFlightCommentByProductRef.current.clear();
         syncPendingSet();
+        syncPendingCommentsSet();
         updateLikedProductIds(EMPTY_SET);
         setLikeError('');
+        setCommentError('');
         if (nextAnonUserId !== null) {
           void loadMyLikes(restaurantSlug, nextEpoch);
         }
         void loadCatalog();
       } else if (prevAnonUserId === null && nextAnonUserId !== null) {
         // Sessão anônima recém-iniciada ou restaurada: se não houver mutação em voo que acabou de criar a sessão, hidrata
-        if (inFlightByProductRef.current.size === 0) {
+        if (inFlightByProductRef.current.size === 0 && inFlightCommentByProductRef.current.size === 0) {
           void loadMyLikes(restaurantSlug, contextEpochRef.current);
         }
       }
@@ -250,12 +288,13 @@ export function PublicMenuProvider({ restaurantSlug, children }: {
       contextEpochRef.current += 1;
       inFlightByProductRef.current.clear();
       confirmedLikesByProductRef.current.clear();
+      inFlightCommentByProductRef.current.clear();
       authListener.subscription.unsubscribe();
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', refreshVisible);
       window.removeEventListener('online', refreshVisible);
     };
-  }, [restaurantSlug, refresh, loadMyLikes, syncPendingSet, updateLikedProductIds]);
+  }, [restaurantSlug, refresh, loadMyLikes, syncPendingSet, syncPendingCommentsSet, updateLikedProductIds]);
 
   const applyProductLike = useCallback(async (productId: string, desiredLiked: boolean): Promise<boolean> => {
     const currentMenu = menuRef.current;
@@ -434,6 +473,105 @@ export function PublicMenuProvider({ restaurantSlug, children }: {
     [applyProductLike],
   );
 
+  const isProductCommentSubmitting = useCallback(
+    (productId: string) => pendingCommentProductIds.has(productId),
+    [pendingCommentProductIds],
+  );
+
+  const getProductCommentsCount = useCallback(
+    (productId: string) => {
+      const product = menu?.products.find((item) => item.id === productId);
+      return Math.max(0, product?.commentsCount ?? 0);
+    },
+    [menu],
+  );
+
+  const clearCommentError = useCallback(() => {
+    setCommentError('');
+  }, []);
+
+  const loadProductComments = useCallback(
+    async (
+      productId: string,
+      options?: { cursor?: ProductCommentsCursor | null; limit?: number },
+    ): Promise<PublicProductCommentsPage> => {
+      return executeGetPublicProductComments(restaurantSlug, productId, options);
+    },
+    [restaurantSlug],
+  );
+
+  const submitProductComment = useCallback(
+    async (
+      productId: string,
+      authorName: string,
+      body: string,
+    ): Promise<CreatedProductCommentResult> => {
+      const currentMenu = menuRef.current;
+      const targetProduct = currentMenu?.products.find((item) => item.id === productId);
+
+      if (!targetProduct || !targetProduct.available) {
+        const unavailabilityMessage = 'Este produto está temporariamente indisponível para comentários.';
+        setCommentError(unavailabilityMessage);
+        throw new Error(unavailabilityMessage);
+      }
+
+      if (inFlightCommentByProductRef.current.has(productId)) {
+        const duplicateMessage = 'Seu comentário já está sendo enviado. Aguarde um instante.';
+        setCommentError(duplicateMessage);
+        throw new Error(duplicateMessage);
+      }
+
+      const epoch = contextEpochRef.current;
+      inFlightCommentByProductRef.current.add(productId);
+      syncPendingCommentsSet();
+      setCommentError('');
+
+      try {
+        const created = await executeCreateProductComment(
+          restaurantSlug,
+          productId,
+          authorName,
+          body,
+        );
+
+        // Se o comentário foi aprovado automaticamente pelo banco, atualizamos o contador do produto no menu
+        if (created.status === 'approved' && !disposedRef.current && epoch === contextEpochRef.current) {
+          updateMenuState((currentMenu) => {
+            if (!currentMenu) return null;
+            return {
+              ...currentMenu,
+              products: currentMenu.products.map((product) =>
+                product.id === productId
+                  ? {
+                      ...product,
+                      commentsCount: Math.max(0, (product.commentsCount ?? 0) + 1),
+                    }
+                  : product,
+              ),
+            };
+          });
+        }
+
+        return created;
+      } catch (cause) {
+        const message =
+          cause instanceof Error
+            ? cause.message
+            : 'Não foi possível enviar seu comentário. Tente novamente.';
+        if (!disposedRef.current && epoch === contextEpochRef.current) {
+          setCommentError(message);
+        }
+        throw cause instanceof Error ? cause : new Error(message);
+      } finally {
+        if (!disposedRef.current && epoch === contextEpochRef.current) {
+          inFlightCommentByProductRef.current.delete(productId);
+          syncPendingCommentsSet();
+        }
+      }
+    },
+    [restaurantSlug, syncPendingCommentsSet, updateMenuState],
+  );
+
   return (
     <MenuContext.Provider
       value={{
@@ -451,6 +589,13 @@ export function PublicMenuProvider({ restaurantSlug, children }: {
         likeProduct,
         unlikeProduct,
         toggleProductLike,
+        pendingCommentProductIds,
+        isProductCommentSubmitting,
+        getProductCommentsCount,
+        commentError,
+        clearCommentError,
+        loadProductComments,
+        submitProductComment,
       }}
     >
       {children}

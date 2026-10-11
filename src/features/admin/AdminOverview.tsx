@@ -66,6 +66,11 @@ export function AdminOverview() {
         {[
           ["catalogo", "Cardápio", "Categorias, produtos, fotos e vídeos."],
           [
+            "comentarios",
+            "Comentários e moderação",
+            "Aprove, oculte ou rejeite comentários e gerencie palavras restritas.",
+          ],
+          [
             "mesas",
             "Mesas e comandas",
             "Atendimentos e configuração das mesas.",
