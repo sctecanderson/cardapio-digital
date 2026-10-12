@@ -20,6 +20,7 @@ export interface RestaurantIdentity extends Restaurant {
   openingHours: string;
   serviceFeePercent: number;
   timezone: string;
+  googleReviewUrl?: string | null;
 }
 export interface IdentityMedia {
   url: string;

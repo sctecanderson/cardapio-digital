@@ -6,7 +6,9 @@ export interface AdminCategory {
 export interface AdminProduct {
   id: string; category_id: string; name: string; slug: string; short_description: string;
   description: string; price_in_cents: number; available: boolean; featured: boolean;
-  sort_order: number; dietary_information: string | null; revision: number;
+  sort_order: number; dietary_information: string | null;
+  prep_time_min_minutes?: number | null; prep_time_max_minutes?: number | null;
+  revision: number;
   images: AdminImage[]; cover_image_id: string | null; video: AdminVideo | null;
 }
 export interface AdminCatalog { categories: AdminCategory[]; products: AdminProduct[] }

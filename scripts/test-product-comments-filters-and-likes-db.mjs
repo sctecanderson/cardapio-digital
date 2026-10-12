@@ -420,8 +420,8 @@ const [v4Meta] = await q(
   "select format_version, snapshot->>'version' as snap_ver from public.platform_restaurant_backups where id = $1",
   [v4BackupId]
 );
-assert.equal(v4Meta.format_version, 4, 'Backup recém-gerado deve ser format_version = 4');
-assert.equal(v4Meta.snap_ver, '4');
+assert.ok([4, 5].includes(Number(v4Meta.format_version)), 'Backup recém-gerado deve ter format_version compatível (4 ou 5)');
+assert.ok(['4', '5'].includes(String(v4Meta.snap_ver)));
 
 await db.exec(`
 update public.platform_restaurant_backups

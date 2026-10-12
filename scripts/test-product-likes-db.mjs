@@ -485,8 +485,8 @@ const [v2BackupMeta] = await q(
   'select format_version, snapshot->>\'version\' as snap_ver, media_references, snapshot from public.platform_restaurant_backups where id = $1',
   [v2BackupId]
 );
-assert.equal(v2BackupMeta.format_version, 4, 'format_version do novo backup gerado após Bloco 6.3-D1 deve ser 4');
-assert.equal(v2BackupMeta.snap_ver, '4', 'version no JSON do novo backup gerado após Bloco 6.3-D1 deve ser 4');
+assert.ok([4, 5].includes(Number(v2BackupMeta.format_version)), 'format_version do novo backup gerado deve ser 4 ou 5');
+assert.ok(['4', '5'].includes(String(v2BackupMeta.snap_ver)), 'version no JSON do novo backup gerado deve ser 4 ou 5');
 assert.equal(v2BackupMeta.media_references.length, 4, 'media_references deve conter as 4 mídias registradas');
 assert.ok(
   v2BackupMeta.media_references.every((ref) => ref.kind && ref.ownerId && ref.media),

@@ -409,6 +409,24 @@ export function IdentityPage() {
               O fuso horário é utilizado para agrupar e filtrar os atendimentos e comandas no horário local do restaurante.
             </p>
           </section>
+          <section className="admin-card">
+            <h2>Avaliações no Google</h2>
+            <label>
+              Link para avaliações no Google
+              <input
+                type="url"
+                maxLength={500}
+                placeholder="https://g.page/r/.../review ou https://maps.app.goo.gl/..."
+                value={draft.googleReviewUrl ?? ""}
+                onChange={(e) => field("googleReviewUrl", e.target.value)}
+              />
+            </label>
+            <p className="admin-help">
+              Cadastre o link oficial de avaliação do Perfil da Empresa no Google (Google Meu Negócio).
+              No painel do Google, clique em <strong>Pedir avaliações</strong> e copie o link curto gerado.
+              Deixe em branco para remover o botão do cardápio público.
+            </p>
+          </section>
         </fieldset>
         <aside className="admin-card identity-preview">
           <h2>Prévia do cardápio</h2>

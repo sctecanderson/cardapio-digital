@@ -55,6 +55,10 @@ export interface Product {
   // Informação fornecida pelo restaurante, nunca presumida.
   dietaryInformation?: string;
 
+  // Estimativa de tempo de preparo cadastrada pelo restaurante (em minutos).
+  prepTimeMinMinutes?: number;
+  prepTimeMaxMinutes?: number;
+
   // Total real de curtidas públicas do produto no catálogo.
   likesCount?: number;
 

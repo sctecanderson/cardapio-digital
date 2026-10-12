@@ -22,6 +22,7 @@ import { usePublicMenu, PublicMenuStatus } from '../menu/PublicMenuProvider';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
 import { useTableContext } from '../tables/useTableContext';
 import { ExploreMedia } from './ExploreMedia';
+import { shareProduct } from '../menu/productShare';
 
 const currency = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -140,6 +141,8 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
     const [commentDrafts, setCommentDrafts] = useState<Record<string, ProductCommentDraft>>({});
     const [burstProductId, setBurstProductId] = useState<string | null>(null);
     const [playbackFeedback, setPlaybackFeedback] = useState<PlaybackFeedbackState | null>(null);
+    const [shareNotice, setShareNotice] = useState<string | null>(null);
+    const shareNoticeTimerRef = useRef<number | null>(null);
 
     const catalog = usePublicMenu();
     const {
@@ -264,6 +267,9 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
             }
             if (playbackTimerRef.current !== null) {
                 window.clearTimeout(playbackTimerRef.current);
+            }
+            if (shareNoticeTimerRef.current !== null) {
+                window.clearTimeout(shareNoticeTimerRef.current);
             }
         };
     }, []);
@@ -603,21 +609,26 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
         clearGestureTracking();
     }
 
+    function showShareNotice(message: string) {
+        if (shareNoticeTimerRef.current !== null) {
+            window.clearTimeout(shareNoticeTimerRef.current);
+        }
+        setShareNotice(message);
+        shareNoticeTimerRef.current = window.setTimeout(() => {
+            setShareNotice(null);
+            shareNoticeTimerRef.current = null;
+        }, 3200);
+    }
+
     async function handleShare(name: string, description: string, slug: string) {
-        const shareUrl = `${window.location.origin}/${restaurantSlug}/produto/${slug}${tableQuery}`;
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: name,
-                    text: description,
-                    url: shareUrl,
-                });
-            } catch {
-                // Usuário cancelou o compartilhamento nativo
-            }
-        } else {
-            navigator.clipboard?.writeText(shareUrl);
-            alert('Link do prato copiado para a área de transferência!');
+        const result = await shareProduct({
+            restaurantSlug,
+            productSlug: slug,
+            productName: name,
+            productDescription: description,
+        });
+        if (result.status !== 'aborted' && result.message) {
+            showShareNotice(result.message);
         }
     }
 
@@ -683,6 +694,17 @@ function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
                     onClick={clearLikeError}
                 >
                     {likeError}
+                </div>
+            )}
+
+            {shareNotice && (
+                <div
+                    className="explore-like-toast explore-share-toast"
+                    role="status"
+                    aria-live="polite"
+                    onClick={() => setShareNotice(null)}
+                >
+                    {shareNotice}
                 </div>
             )}
 

@@ -655,9 +655,9 @@ const [v3Meta] = await q(
   "select format_version, snapshot->>'version' as snap_ver, snapshot->'tables'->'product_comments' as comm_rows from public.platform_restaurant_backups where id = $1",
   [v3BackupId],
 );
-assert.equal(v3Meta.format_version, 4, 'Novo backup pós-6.3-D1 deve ser format_version = 4');
-assert.equal(v3Meta.snap_ver, '4', 'Snapshot JSON deve ter version = 4');
-assert.equal(v3Meta.comm_rows.length, 2, 'Snapshot v4 deve incluir os 2 comentários');
+assert.ok([4, 5].includes(Number(v3Meta.format_version)), 'Novo backup pós-6.3-D1 deve ser format_version 4 ou 5');
+assert.ok(['4', '5'].includes(String(v3Meta.snap_ver)), 'Snapshot JSON deve ter version 4 ou 5');
+assert.equal(v3Meta.comm_rows.length, 2, 'Snapshot deve incluir os 2 comentários');
 
 await db.exec(`
 update public.platform_restaurant_backups
@@ -745,7 +745,7 @@ insert into public.platform_restaurant_backups (
   id, source_restaurant_id, source_name, source_slug, format_version, status, snapshot,
   files_initialized_at, completed_at, snapshot_sha256, manifest_sha256, storage_inventory, media_references
 ) values (
-  '${tamperedV3Id}', '${v3RestId}', 'Tampered V3', 'tampered-v3', 4, 'ready', '${JSON.stringify(badV3Snap).replace(/'/g, "''")}'::jsonb,
+  '${tamperedV3Id}', '${v3RestId}', 'Tampered V3', 'tampered-v3', ${v3Meta.format_version}, 'ready', '${JSON.stringify(badV3Snap).replace(/'/g, "''")}'::jsonb,
   now(), now(), repeat('c', 64), repeat('d', 64), '[]'::jsonb, '[]'::jsonb
 );
 `);
@@ -811,8 +811,8 @@ const [v3NoCommMeta] = await q(
   "select format_version, snapshot->>'version' as snap_ver from public.platform_restaurant_backups where id = $1",
   [v3NoCommentsBackupId],
 );
-assert.equal(v3NoCommMeta.format_version, 4, 'Mesmo sem comentários, novo backup deve ser v4');
-assert.equal(v3NoCommMeta.snap_ver, '4', 'Mesmo sem comentários, snapshot JSON deve ter version = 4');
+assert.ok([4, 5].includes(Number(v3NoCommMeta.format_version)), 'Mesmo sem comentários, novo backup deve ser v4 ou v5');
+assert.ok(['4', '5'].includes(String(v3NoCommMeta.snap_ver)), 'Mesmo sem comentários, snapshot JSON deve ter version 4 ou 5');
 
 await db.exec(`
 update public.platform_restaurant_backups

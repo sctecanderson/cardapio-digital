@@ -53,6 +53,14 @@ export function CatalogEditor({
     available: product?.available ?? true,
     featured: product?.featured ?? false,
     dietaryInformation: product?.dietary_information ?? "",
+    prepTimeMin:
+      product?.prep_time_min_minutes != null
+        ? String(product.prep_time_min_minutes)
+        : "",
+    prepTimeMax:
+      product?.prep_time_max_minutes != null
+        ? String(product.prep_time_max_minutes)
+        : "",
   });
   const [photos, setPhotos] = useState<DraftPhoto[]>(() =>
     [...(product?.images ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
@@ -123,6 +131,37 @@ export function CatalogEditor({
       setError("Descreva cada foto do produto.");
       return;
     }
+    let prepMin: number | null = null;
+    let prepMax: number | null = null;
+    if (isProduct) {
+      const minTrim = draft.prepTimeMin.trim();
+      const maxTrim = draft.prepTimeMax.trim();
+      if ((minTrim && !maxTrim) || (!minTrim && maxTrim)) {
+        setError("Informe tanto o tempo mínimo quanto o máximo ou deixe ambos em branco.");
+        return;
+      }
+      if (minTrim && maxTrim) {
+        const parsedMin = parseInt(minTrim, 10);
+        const parsedMax = parseInt(maxTrim, 10);
+        if (
+          isNaN(parsedMin) ||
+          isNaN(parsedMax) ||
+          parsedMin < 1 ||
+          parsedMax < 1 ||
+          parsedMin > 1440 ||
+          parsedMax > 1440
+        ) {
+          setError("O tempo estimado de preparo deve estar entre 1 e 1440 minutos.");
+          return;
+        }
+        if (parsedMin > parsedMax) {
+          setError("O tempo mínimo de preparo não pode ser maior que o tempo máximo.");
+          return;
+        }
+        prepMin = parsedMin;
+        prepMax = parsedMax;
+      }
+    }
     submitting.current = true;
     setBusy(true);
     try {
@@ -139,6 +178,8 @@ export function CatalogEditor({
               available: draft.available,
               featured: draft.featured,
               dietary_information: draft.dietaryInformation.trim(),
+              prep_time_min_minutes: prepMin,
+              prep_time_max_minutes: prepMax,
             }
           : { active: draft.active }),
       };
@@ -323,9 +364,46 @@ export function CatalogEditor({
                     }
                   />
                 </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-sm font-medium">
+                    Tempo mínimo (min)
+                    <input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      step={1}
+                      placeholder="Ex: 15"
+                      value={draft.prepTimeMin}
+                      className={inputClass}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          prepTimeMin: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="block text-sm font-medium">
+                    Tempo máximo (min)
+                    <input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      step={1}
+                      placeholder="Ex: 25"
+                      value={draft.prepTimeMax}
+                      className={inputClass}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          prepTimeMax: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
                 <p className="text-xs opacity-75">
-                  O novo preço vale para os próximos lançamentos. Consumos já
-                  registrados mantêm o valor original.
+                  Opcional. Para estimativa única, informe o mesmo valor nos dois campos. Deixe em branco se não quiser exibir.
                 </p>
                 <label className="block text-sm font-medium">
                   Ingredientes, alergênicos e restrições

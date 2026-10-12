@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { usePublicMenu, PublicMenuStatus } from './PublicMenuProvider';
 import type { Product } from '../../types/menu';
+import { shareProduct } from './productShare';
 import { useTableContext } from '../tables/useTableContext';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
 import { ServiceActionPopup, type ServiceActionType } from '../service/ServiceActionPopup';
@@ -93,20 +94,37 @@ export function ProductPage() {
   const likesCount = catalog.getProductLikesCount(product.id);
   const likesLabel = likesCount === 1 ? '1 curtida' : `${formatLikes(likesCount)} curtidas`;
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: product.name,
-          text: product.shortDescription || product.description,
-          url: window.location.href,
-        });
-      } catch {
-        // Ignora cancelamento pelo usuário
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const shareNoticeTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (shareNoticeTimerRef.current !== null) {
+        window.clearTimeout(shareNoticeTimerRef.current);
       }
-    } else {
-      navigator.clipboard?.writeText(window.location.href);
-      alert('Link do prato copiado para a área de transferência!');
+    };
+  }, []);
+
+  const showShareNotice = (message: string) => {
+    if (shareNoticeTimerRef.current !== null) {
+      window.clearTimeout(shareNoticeTimerRef.current);
+    }
+    setShareNotice(message);
+    shareNoticeTimerRef.current = window.setTimeout(() => {
+      setShareNotice(null);
+      shareNoticeTimerRef.current = null;
+    }, 3200);
+  };
+
+  const handleShare = async () => {
+    const result = await shareProduct({
+      restaurantSlug,
+      productSlug: product.slug,
+      productName: product.name,
+      productDescription: product.shortDescription || product.description,
+    });
+    if (result.status !== 'aborted' && result.message) {
+      showShareNotice(result.message);
     }
   };
 
@@ -117,13 +135,20 @@ export function ProductPage() {
     rail.scrollTo({ left: slide.offsetLeft, behavior: 'smooth' });
   }
 
-  // Ingredientes simulados amigáveis derivados da descrição ou padrão gastronômico
-  const ingredientsList = product.description
-    ? product.description.split('.').filter(Boolean)[0]
-    : 'Ingredientes selecionados e temperos frescos da casa';
-
   return (
     <div className="product-page">
+      {/* Toast no topo da tela para aviso discreto de compartilhamento */}
+      {shareNotice && (
+        <div
+          className="product-top-toast"
+          role="status"
+          aria-live="polite"
+          onClick={() => setShareNotice(null)}
+        >
+          {shareNotice}
+        </div>
+      )}
+
       {/* Imagem / Carrossel com Botões Flutuantes */}
       <div className="product-gallery-container">
         {/* Botão ← Voltar */}
@@ -228,13 +253,36 @@ export function ProductPage() {
               </svg>
               <span>{likesLabel}</span>
             </button>
-            <span className="product-meta-item time">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              25 min
-            </span>
+
+            {product.prepTimeMinMinutes != null && product.prepTimeMaxMinutes != null && (
+              <span
+                className="product-meta-item time"
+                title="Estimativa média de tempo de preparo da cozinha"
+                aria-label={`Preparo estimado: ${
+                  product.prepTimeMinMinutes === product.prepTimeMaxMinutes
+                    ? `${product.prepTimeMinMinutes} minutos`
+                    : `${product.prepTimeMinMinutes} a ${product.prepTimeMaxMinutes} minutos`
+                }`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span>
+                  {product.prepTimeMinMinutes === product.prepTimeMaxMinutes
+                    ? `Preparo: ${product.prepTimeMinMinutes} min`
+                    : `Preparo: ${product.prepTimeMinMinutes}–${product.prepTimeMaxMinutes} min`}
+                </span>
+              </span>
+            )}
           </div>
 
           {catalog.likeError && (
@@ -256,24 +304,28 @@ export function ProductPage() {
         </div>
 
         {/* Descrição */}
-        <div className="product-section">
-          <h2 className="product-section-title">Descrição</h2>
-          <p className="product-section-text">
-            {product.description || product.shortDescription || 'Receita autoral preparada com ingredientes selecionados pelo nosso chef, finalizada com toques contemporâneos de azeite e ervas frescas.'}
-          </p>
-        </div>
-
-        {/* Ingredientes */}
-        <div className="product-section">
-          <h2 className="product-section-title">Ingredientes</h2>
-          <div className="product-ingredients-text">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 2a9 9 0 0 1 9 9c0 4.97-4.03 9-9 9s-9-4.03-9-9a9 9 0 0 1 9-9z" />
-              <path d="M12 2v18" />
-            </svg>
-            <span>{ingredientsList}</span>
+        {(product.description || product.shortDescription) && (
+          <div className="product-section">
+            <h2 className="product-section-title">Descrição</h2>
+            <p className="product-section-text">
+              {product.description || product.shortDescription}
+            </p>
           </div>
-        </div>
+        )}
+
+        {/* Ingredientes / Detalhes Adicionais */}
+        {product.dietaryInformation && (
+          <div className="product-section">
+            <h2 className="product-section-title">Informações Dietéticas e Alergênicos</h2>
+            <div className="product-ingredients-text">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2a9 9 0 0 1 9 9c0 4.97-4.03 9-9 9s-9-4.03-9-9a9 9 0 0 1 9-9z" />
+                <path d="M12 2v18" />
+              </svg>
+              <span>{product.dietaryInformation}</span>
+            </div>
+          </div>
+        )}
 
         {/* Sanfona de Restrições */}
         <div className="product-restrictions-accordion">

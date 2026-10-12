@@ -125,12 +125,21 @@ export function parsePublicMenu(value: unknown): RestaurantMenu {
       }
       video = { url: mediaUrl(media.url), mimeType: media.mimeType };
     }
+    const prepTimeMinMinutes =
+      row.prepTimeMinMinutes == null
+        ? undefined
+        : integer(row.prepTimeMinMinutes);
+    const prepTimeMaxMinutes =
+      row.prepTimeMaxMinutes == null
+        ? undefined
+        : integer(row.prepTimeMaxMinutes);
     return { id: text(row.id), restaurantId, categoryId, slug: text(row.slug),
       name: text(row.name), shortDescription: text(row.shortDescription),
       description: text(row.description), priceInCents,
       available: boolean(row.available), featured: boolean(row.featured),
       sortOrder: integer(row.sortOrder), coverImageId, images, video,
       dietaryInformation: row.dietaryInformation == null ? undefined : text(row.dietaryInformation),
+      prepTimeMinMinutes, prepTimeMaxMinutes,
       likesCount, commentsCount };
   });
   if (new Set(products.map((product) => product.id)).size !== products.length ||
