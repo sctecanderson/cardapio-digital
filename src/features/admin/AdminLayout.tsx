@@ -8,6 +8,7 @@ import {
 } from "react-router";
 import { useRestaurant } from "../restaurants/RestaurantProvider";
 import { signOutStaff, type StaffAccess } from "../auth/staffAuth";
+import { ThemeToggleButton } from "../theme/ThemeToggleButton";
 
 export function AdminLayout() {
   const access = useOutletContext<StaffAccess>();
@@ -88,13 +89,16 @@ export function AdminLayout() {
       <div className="admin-workspace">
         <div className="admin-topbar">
           <span>Administração do restaurante</span>
-          <Link to={`/${r.slug}`} target="_blank" rel="noopener noreferrer">
-            Ver cardápio ↗
-          </Link>
-          <span className="admin-profile">
-            <AdminIcon name="user" />
-            Administrador
-          </span>
+          <div className="admin-topbar-actions">
+            <Link to={`/${r.slug}`} target="_blank" rel="noopener noreferrer">
+              Ver cardápio ↗
+            </Link>
+            <ThemeToggleButton className="admin-theme-toggle" />
+            <span className="admin-profile">
+              <AdminIcon name="user" />
+              Administrador
+            </span>
+          </div>
         </div>
         <main id="admin-content">
           <Outlet context={access} />

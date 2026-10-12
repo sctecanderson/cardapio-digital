@@ -1660,8 +1660,9 @@ footer a {
     text-underline-offset: 4px;
 }
 
-/* Layout público (cabeçalho, abas e rodapé) conforme a referência home.jfif. */
-.public-site {
+/* Layout público e de equipe (cabeçalho, abas e rodapé) */
+.public-site,
+.staff-site {
     font-family: 'Lato', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased
 }
@@ -3354,6 +3355,98 @@ footer a {
 
 .service-popup-link-btn:hover {
     color: var(--brand, #b9472b);
+}
+
+/* ==========================================================================
+   Opções de Taxa de Serviço no Pop-up da Conta
+   ========================================================================== */
+.service-fee-group {
+    width: 100%;
+    margin: 16px 0 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+}
+
+.service-fee-legend {
+    margin: 0 0 2px 2px;
+    font-size: 12px;
+    font-weight: 700;
+    color: color-mix(in srgb, var(--ink, #2b1d17) 78%, transparent);
+    letter-spacing: 0.01em;
+}
+
+.service-fee-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    min-height: 44px;
+    border-radius: 14px;
+    border: 1.5px solid #ded5c8;
+    background-color: #ffffff;
+    color: #4a3a2d;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.35;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: all 0.18s cubic-bezier(0.2, 0, 0, 1);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.service-fee-option:hover {
+    background-color: #faf7f2;
+    border-color: #d1c5b4;
+}
+
+.service-fee-option.is-selected {
+    border-color: var(--brand, #b9472b);
+    background-color: color-mix(in srgb, var(--brand, #b9472b) 6%, #ffffff);
+    color: var(--brand, #b9472b);
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(185, 71, 43, 0.12);
+}
+
+.service-fee-radio {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+    border-radius: 50%;
+    border: 2px solid #b3a496;
+    background: transparent;
+    margin: 0;
+    display: grid;
+    place-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.service-fee-radio::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transform: scale(0);
+    transition: transform 0.15s ease;
+    background-color: var(--brand, #b9472b);
+}
+
+.service-fee-option.is-selected .service-fee-radio {
+    border-color: var(--brand, #b9472b);
+}
+
+.service-fee-option.is-selected .service-fee-radio::before {
+    transform: scale(1);
+}
+
+.service-fee-radio:focus-visible {
+    outline: 2px solid var(--brand, #b9472b);
+    outline-offset: 2px;
 }
 
 /* Modal flutuante centralizado no Desktop */
@@ -5687,5 +5780,1392 @@ footer a {
 
     .home-google-action-btn {
         width: 100%;
+    }
+}
+
+/* ==========================================================================
+   BLOCO 7.1: TEMA CLARO / ESCURO E ACESSIBILIDADE PÚBLICA
+   ========================================================================== */
+
+/* 1. Botão de Alternância de Tema (.public-theme-toggle-btn) */
+.public-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.public-theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1.5px solid color-mix(in srgb, var(--brand, #b9472b) 45%, transparent);
+    background: color-mix(in srgb, var(--page, #fff8ef) 80%, transparent);
+    color: var(--ink, #2b1d17);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease, color 0.18s ease;
+}
+
+.public-theme-toggle-btn:hover {
+    background: color-mix(in srgb, var(--brand, #b9472b) 14%, transparent);
+    border-color: var(--brand, #b9472b);
+    transform: scale(1.05);
+}
+
+.public-theme-toggle-btn:focus-visible {
+    outline: 2.5px solid var(--brand, #b9472b);
+    outline-offset: 3px;
+}
+
+.public-theme-toggle-btn svg {
+    width: 19px;
+    height: 19px;
+    stroke: currentColor;
+    flex-shrink: 0;
+    transition: transform 0.25s ease;
+}
+
+/* Variação no header de Comentários completos */
+.product-comments-full-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.product-comments-theme-toggle {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    border-color: rgba(210, 195, 179, 0.85);
+}
+
+/* ==========================================================================
+   2. REGRAS DE TEMA ESCURO ([data-theme="dark"])
+   Preserva mídias (fotos/vídeos) e mantém o Admin 100% blindado.
+   ========================================================================== */
+
+[data-theme="dark"].restaurant {
+    background: #14110f;
+    color: #f7f3ee;
+}
+
+/* Elementos do Cabeçalho e Wordmark */
+[data-theme="dark"] .wordmark {
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .wordmark span {
+    color: rgba(247, 243, 238, 0.65) !important;
+}
+
+[data-theme="dark"] .restaurant .badge {
+    border-color: color-mix(in srgb, var(--brand) 75%, transparent);
+    color: var(--brand);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .restaurant .tabs {
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .restaurant .tabs a {
+    color: rgba(247, 243, 238, 0.72);
+}
+
+[data-theme="dark"] .restaurant .tabs a.active {
+    color: #ffffff;
+}
+
+/* Cards de Prato da Home e do Cardápio */
+[data-theme="dark"] .menu-item-card,
+[data-theme="dark"] .home-dish-card,
+[data-theme="dark"] .menu-featured-card {
+    background: #1c1815;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #f7f3ee;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .menu-item-card:hover,
+[data-theme="dark"] .home-dish-card:hover,
+[data-theme="dark"] .menu-featured-card:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .menu-item-title,
+[data-theme="dark"] .home-dish-copy h3,
+[data-theme="dark"] .menu-featured-title {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .menu-item-desc,
+[data-theme="dark"] .home-dish-copy p,
+[data-theme="dark"] .menu-featured-desc {
+    color: #a8988a;
+}
+
+[data-theme="dark"] .menu-item-price,
+[data-theme="dark"] .home-dish-footer strong,
+[data-theme="dark"] .menu-featured-price {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .home-dish-inline-rating,
+[data-theme="dark"] .menu-featured-inline-rating {
+    color: #ded6cc;
+}
+
+[data-theme="dark"] .home-dish-rating {
+    background: rgba(20, 17, 15, 0.78);
+    color: #f7f3ee;
+    backdrop-filter: blur(6px);
+}
+
+[data-theme="dark"] .menu-item-image-wrap,
+[data-theme="dark"] .home-dish-image-wrap,
+[data-theme="dark"] .menu-featured-image-wrap {
+    background: #25201c;
+}
+
+[data-theme="dark"] .home-dish-placeholder {
+    color: #a8988a;
+}
+
+/* Busca e Categorias do Cardápio */
+[data-theme="dark"] .menu-search-field {
+    background: #1c1815;
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .menu-search-field input {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .menu-search-field input::placeholder {
+    color: #8c7867;
+}
+
+[data-theme="dark"] .menu-category-pill {
+    background: rgba(25, 21, 18, 0.85);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #ded6cc;
+}
+
+[data-theme="dark"] .menu-category-pill:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .menu-category-pill.active {
+    background: var(--brand, #b9472b);
+    border-color: var(--brand, #b9472b);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .menu-categories-bar {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .menu-category-btn {
+    color: #a8988a;
+}
+
+[data-theme="dark"] .menu-category-btn.active {
+    color: var(--brand);
+}
+
+/* Card Principal de Produto (Página de Detalhes) */
+[data-theme="dark"] .product-card {
+    background: #191512;
+    box-shadow: 0 -8px 26px rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="dark"] .product-title {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .product-meta-row {
+    color: #ded6cc;
+}
+
+[data-theme="dark"] .product-ingredients-text {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .product-restrictions-accordion {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .product-restrictions-toggle {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .product-restrictions-toggle .arrow {
+    color: #a8988a;
+}
+
+[data-theme="dark"] .product-prep-badge {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #ded6cc;
+}
+
+[data-theme="dark"] .product-like-btn,
+[data-theme="dark"] .product-meta-item.time {
+    background: #231d19;
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .product-like-btn:hover:not(:disabled) {
+    background: rgba(230, 57, 70, 0.15);
+    border-color: rgba(230, 57, 70, 0.4);
+}
+
+[data-theme="dark"] .product-like-btn.liked {
+    background: rgba(230, 57, 70, 0.2);
+    border-color: rgba(230, 57, 70, 0.5);
+    color: #ff858f;
+}
+
+[data-theme="dark"] .product-section-title {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .product-section-text {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .product-price {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .product-order-notice {
+    background: rgba(32, 26, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #ded6cc;
+}
+
+/* Card Google Reviews na Home */
+[data-theme="dark"] .home-google-card {
+    background: #1c1815;
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .home-google-card:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .home-google-badge {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .home-google-verified-tag {
+    color: #34d399;
+    background: rgba(6, 78, 59, 0.35);
+    border-color: rgba(52, 211, 153, 0.35);
+}
+
+[data-theme="dark"] .home-google-card-body {
+    border-top-color: rgba(255, 255, 255, 0.08);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .home-google-stars-sub {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .home-google-cta-copy {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .home-google-title {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .home-google-desc {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .home-google-action-btn {
+    background: #2a2420;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .home-google-action-btn:hover {
+    background: #362e29;
+    border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Dock Inferior (.home-bottom-nav) */
+[data-theme="dark"] .home-bottom-nav {
+    background: rgba(25, 21, 18, 0.94);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .home-bottom-nav a,
+[data-theme="dark"] .home-bottom-nav button {
+    color: #a8988a;
+}
+
+[data-theme="dark"] .home-bottom-nav a.active {
+    color: var(--brand, #b9472b);
+}
+
+[data-theme="dark"] .home-bottom-nav a:hover,
+[data-theme="dark"] .home-bottom-nav button:hover {
+    color: var(--brand, #b9472b);
+}
+
+/* Popover Flutuante de Comentários no Explorar */
+[data-theme="dark"] .product-comments-popover {
+    background: rgba(26, 22, 19, 0.97);
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #f7f3ee;
+    box-shadow:
+        0 20px 48px rgba(0, 0, 0, 0.65),
+        0 4px 14px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .product-comments-popover-arrow {
+    background: #1a1613;
+    border-color: rgba(255, 255, 255, 0.16);
+}
+
+[data-theme="dark"] .product-comments-header {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .product-comments-item {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .product-comment-content {
+    color: #e5ded6;
+}
+
+[data-theme="dark"] .product-comment-author {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .product-comment-date {
+    color: #9c8c7e;
+}
+
+[data-theme="dark"] .product-comments-form-card {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .product-comments-textarea,
+[data-theme="dark"] .product-comments-input {
+    background: #14110f;
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .product-comments-textarea:focus,
+[data-theme="dark"] .product-comments-input:focus {
+    border-color: var(--brand);
+    background: #181412;
+}
+
+/* Página Completa de Comentários */
+[data-theme="dark"] .product-comments-full-page {
+    background: #14110f;
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .product-comments-full-header {
+    background: rgba(20, 17, 15, 0.95);
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .product-comments-full-back-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .product-comments-full-back-btn:hover {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+[data-theme="dark"] .product-comments-full-title {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .product-comments-full-subtitle {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .product-comments-full-card {
+    background: #1c1815;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .product-comments-full-form-dock {
+    background: rgba(20, 17, 15, 0.96);
+    border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Tela de Comanda */
+[data-theme="dark"] .tab-orders-page {
+    background: #14110f;
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .tab-orders-title {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .tab-orders-section-heading h2 {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .tab-hero-card,
+[data-theme="dark"] .tab-guest-sync-banner,
+[data-theme="dark"] .tab-code-highlight-card,
+[data-theme="dark"] .tab-empty-orders-box,
+[data-theme="dark"] .tab-closed-box {
+    background: #1c1815;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #f7f3ee;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .tab-hero-card h2,
+[data-theme="dark"] .tab-empty-orders-box h3,
+[data-theme="dark"] .tab-closed-box h2 {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .tab-hero-card p,
+[data-theme="dark"] .tab-code-instruction,
+[data-theme="dark"] .tab-empty-orders-box p,
+[data-theme="dark"] .tab-closed-box p,
+[data-theme="dark"] .tab-code-label {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .tab-code-highlight-card .tab-code-title {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .tab-code-highlight-card .tab-code-big-number {
+    background: #251d18;
+    border-color: rgba(235, 120, 95, 0.35);
+    color: #ff8566;
+}
+
+[data-theme="dark"] .tab-hero-icon {
+    background: #2b221d;
+    color: var(--brand, #b9472b);
+}
+
+[data-theme="dark"] .tab-order-name {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .tab-order-price {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .tab-orders-list {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .tab-order-avatar {
+    background: #25201c;
+}
+
+[data-theme="dark"] .tab-orders-summary {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Modais de Serviço (Chamar Garçom e Pedir Conta) */
+[data-theme="dark"] .service-popup-card {
+    background: #1c1815;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 -10px 36px rgba(0, 0, 0, 0.65);
+}
+
+[data-theme="dark"] .service-popup-handle {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .service-popup-close-btn {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .service-popup-close-btn:hover {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+[data-theme="dark"] .service-popup-icon-bubble {
+    background: #28211c;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .service-popup-title {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .service-popup-desc {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .service-popup-badge {
+    background: #38251a;
+    color: #ff8a65;
+    border: 1px solid rgba(255, 138, 101, 0.25);
+}
+
+[data-theme="dark"] .service-popup-badge.attended {
+    background: rgba(46, 125, 50, 0.2);
+    color: #81c784;
+    border-color: rgba(129, 199, 132, 0.3);
+}
+
+[data-theme="dark"] .service-popup-timer {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .service-popup-link-btn {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .service-popup-link-btn:hover {
+    color: var(--brand);
+}
+
+[data-theme="dark"] .service-fee-legend {
+    color: #c7b8aa;
+}
+
+[data-theme="dark"] .service-fee-option {
+    background-color: #1a1614 !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+    color: #e2d7cc !important;
+}
+
+[data-theme="dark"] .service-fee-option:hover {
+    background-color: #241d19 !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+[data-theme="dark"] .service-fee-option.is-selected {
+    border-color: var(--brand) !important;
+    background-color: rgba(185, 71, 43, 0.22) !important;
+    color: #fff4ee !important;
+}
+
+[data-theme="dark"] .service-fee-radio {
+    border-color: #8c7b6d;
+}
+
+[data-theme="dark"] .service-fee-option.is-selected .service-fee-radio {
+    border-color: var(--brand);
+}
+
+
+/* Botões do topo da página de detalhes do produto */
+[data-theme="dark"] .product-top-btn {
+    background: rgba(20, 17, 15, 0.85);
+    border-color: rgba(255, 255, 255, 0.18);
+    color: #f7f3ee;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .product-top-btn:hover {
+    background: rgba(30, 26, 23, 0.98);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* ==========================================================================
+   3. TEMA ESCURO DEDICADO — ÁREA EQUIPE (.staff-site)
+   ========================================================================== */
+
+[data-theme="dark"] .staff-site {
+    background: #14110f;
+    color: #f7f3ee;
+}
+
+/* 3.0 Card de Acesso da Equipe (/:restaurantSlug/acesso) */
+.staff-access-card {
+    background-color: #ffffff;
+    border-color: rgba(60, 40, 30, 0.15);
+    color: #2b1d17;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.staff-access-title {
+    color: #2b1d17;
+}
+
+.staff-access-subtitle {
+    color: #6b5a4e;
+}
+
+.staff-access-status {
+    color: #2b1d17;
+}
+
+.staff-access-role {
+    color: #5c493b;
+}
+
+.staff-access-btn-outline {
+    background-color: #ffffff;
+    border-color: rgba(60, 40, 30, 0.25);
+    color: #2b1d17;
+}
+
+.staff-access-btn-outline:hover {
+    background-color: #f7f4ee;
+    border-color: rgba(60, 40, 30, 0.4);
+}
+
+.staff-access-btn-signout {
+    background-color: #ffffff;
+    border-color: rgba(60, 40, 30, 0.25);
+    color: #2b1d17;
+}
+
+.staff-access-btn-signout:hover:not(:disabled) {
+    background-color: #f7f4ee;
+    border-color: rgba(60, 40, 30, 0.4);
+}
+
+.staff-access-label {
+    color: #2b1d17;
+}
+
+.staff-access-input {
+    background-color: #ffffff;
+    border-color: rgba(60, 40, 30, 0.25);
+    color: #2b1d17;
+}
+
+.staff-access-input:focus {
+    border-color: var(--brand);
+    outline: 2px solid var(--brand);
+    outline-offset: 1px;
+}
+
+[data-theme="dark"] .staff-access-card {
+    background-color: #1c1815 !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+    color: #f7f3ee !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+[data-theme="dark"] .staff-access-title {
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .staff-access-subtitle {
+    color: #b5a596 !important;
+}
+
+[data-theme="dark"] .staff-access-status {
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .staff-access-role {
+    color: #ded6cc !important;
+}
+
+[data-theme="dark"] .staff-access-btn-outline {
+    background-color: #28211c !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .staff-access-btn-outline:hover {
+    background-color: #382e27 !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+[data-theme="dark"] .staff-access-btn-signout {
+    background-color: #28211c !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .staff-access-btn-signout:hover:not(:disabled) {
+    background-color: #382e27 !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+[data-theme="dark"] .staff-access-label {
+    color: #ded6cc !important;
+}
+
+[data-theme="dark"] .staff-access-input {
+    background-color: #14110f !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .staff-salon-container {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .staff-salon-title {
+    color: #d1c4b7;
+}
+
+[data-theme="dark"] .staff-salon-subtitle {
+    color: #a8988a;
+}
+
+[data-theme="dark"] .staff-table-search-bar {
+    background: #1c1815;
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-table-search-bar:focus {
+    border-color: var(--brand, #b9472b);
+}
+
+[data-theme="dark"] .staff-tables-scroll-wrap {
+    scrollbar-color: #554437 #1e1916;
+}
+
+[data-theme="dark"] .staff-tables-scroll-wrap::-webkit-scrollbar-track {
+    background: #1e1916;
+}
+
+[data-theme="dark"] .staff-tables-scroll-wrap::-webkit-scrollbar-thumb {
+    background: #554437;
+}
+
+[data-theme="dark"] .staff-table-btn {
+    background: #231d18;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-table-btn:hover {
+    background: #2d2520;
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+[data-theme="dark"] .staff-table-btn.active {
+    background: var(--brand, #b9472b);
+    color: #ffffff;
+    border-color: var(--brand, #b9472b);
+}
+
+[data-theme="dark"] .staff-manage-card {
+    background: #1c1815;
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .staff-manage-title {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-manage-time {
+    color: #d1c4b7;
+}
+
+[data-theme="dark"] .staff-sub-block {
+    border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .staff-sub-title {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-sub-desc {
+    color: #a8988a;
+}
+
+[data-theme="dark"] .staff-digit-box {
+    background: #14110f;
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-digit-box:focus {
+    border-color: var(--brand, #b9472b);
+}
+
+[data-theme="dark"] .staff-outline-action-btn {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-outline-action-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.45);
+}
+
+[data-theme="dark"] .staff-create-tab-input {
+    background: #14110f;
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-create-tab-input:focus {
+    border-color: var(--brand, #b9472b);
+}
+
+[data-theme="dark"] .staff-tab-inner-card {
+    background: #221c18;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .staff-tab-label-name {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-tab-open-pill {
+    background: #2b231d;
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-tab-access-count {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .staff-tab-toggle-indicator {
+    background: #2b231d;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-tab-header-btn:hover .staff-tab-toggle-indicator {
+    background: #382e26;
+    color: #ffffff;
+}
+
+[data-theme="dark"] .staff-tab-consume-title {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-product-select,
+[data-theme="dark"] .staff-qty-input,
+[data-theme="dark"] .staff-guest-select {
+    background: #14110f;
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-tab-total-row {
+    border-top-color: rgba(255, 255, 255, 0.1);
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .staff-tab-total-label,
+[data-theme="dark"] .staff-tab-total-value {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-link-guest-label {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .staff-link-guest-btn {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-link-guest-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .staff-closure-section {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .staff-access-pill {
+    background: #2b231d;
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-full-close-btn {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .staff-full-close-btn:hover {
+    background: rgba(220, 38, 38, 0.16);
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+
+/* Histórico e Perfil da Equipe no tema escuro */
+[data-theme="dark"] .staff-site div.bg-white,
+[data-theme="dark"] .staff-site li.bg-white,
+[data-theme="dark"] .staff-site div.rounded-2xl.border {
+    background-color: #1c1815 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-theme="dark"] .staff-site button.hover\:bg-\[\#fffdfa\]:hover {
+    background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+[data-theme="dark"] .staff-site div.bg-\[\#fffaf4\] {
+    background-color: #241d18 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Cards de chamados de garçom e conta no modo escuro na área Equipe */
+[data-theme="dark"] .staff-site .bg-blue-50\/80,
+[data-theme="dark"] .staff-site .bg-blue-50 {
+    background-color: rgba(30, 58, 138, 0.22) !important;
+    border-color: rgba(96, 165, 250, 0.3) !important;
+}
+
+[data-theme="dark"] .staff-site .text-blue-900,
+[data-theme="dark"] .staff-site .text-blue-950 {
+    color: #93c5fd !important;
+}
+
+[data-theme="dark"] .staff-site .text-blue-800 {
+    color: #bfdbfe !important;
+}
+
+[data-theme="dark"] .staff-site .bg-blue-200\/80,
+[data-theme="dark"] .staff-site .bg-blue-200 {
+    background-color: rgba(59, 130, 246, 0.28) !important;
+    color: #dbeafe !important;
+}
+
+[data-theme="dark"] .staff-site .bg-amber-50 {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+[data-theme="dark"] .staff-site .text-amber-900,
+[data-theme="dark"] .staff-site .text-amber-950 {
+    color: #fcd34d !important;
+}
+
+[data-theme="dark"] .staff-site .text-amber-800 {
+    color: #fde68a !important;
+}
+
+[data-theme="dark"] .staff-site .text-amber-700 {
+    color: #fef08a !important;
+}
+
+[data-theme="dark"] .staff-site .bg-amber-200\/80,
+[data-theme="dark"] .staff-site .bg-amber-200 {
+    background-color: rgba(245, 158, 11, 0.25) !important;
+    color: #fef3c7 !important;
+}
+
+[data-theme="dark"] .staff-site .bg-slate-50 {
+    background-color: #1e1b18 !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+[data-theme="dark"] .staff-site .text-slate-900,
+[data-theme="dark"] .staff-site .text-slate-800 {
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .staff-site .text-slate-700,
+[data-theme="dark"] .staff-site .text-slate-600 {
+    color: #c7b8aa !important;
+}
+
+[data-theme="dark"] .staff-site .bg-slate-200 {
+    background-color: #2c2520 !important;
+    color: #ded6cc !important;
+}
+
+[data-theme="dark"] .staff-site .bg-white.text-slate-800,
+[data-theme="dark"] .staff-site button.bg-white {
+    background-color: #28211c !important;
+    color: #f7f3ee !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+[data-theme="dark"] .staff-site button.bg-white:hover {
+    background-color: #382e27 !important;
+}
+
+/* ==========================================================================
+   4. TEMA ESCURO DEDICADO — PAINEL ADMINISTRATIVO (.admin-app)
+   ========================================================================== */
+
+.admin-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.admin-theme-toggle {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    border-color: #ded7cd;
+    background: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="dark"] .admin-app {
+    background: #14110f;
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .admin-sidebar {
+    background: #1a1512;
+    border-right-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .admin-logo {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .admin-sidebar nav a,
+[data-theme="dark"] .admin-exit {
+    color: #b5a596;
+}
+
+[data-theme="dark"] .admin-sidebar nav a:hover,
+[data-theme="dark"] .admin-exit:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .admin-sidebar nav a.active {
+    color: #ffffff;
+    background: color-mix(in srgb, var(--brand) 22%, transparent);
+    box-shadow: inset 4px 0 var(--brand);
+}
+
+[data-theme="dark"] .admin-exit {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .admin-topbar {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+    color: #b5a596;
+}
+
+[data-theme="dark"] .admin-topbar a {
+    color: var(--brand);
+}
+
+[data-theme="dark"] .admin-theme-toggle {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .admin-theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+[data-theme="dark"] .admin-profile {
+    color: #ded6cc;
+}
+
+[data-theme="dark"] .admin-profile svg {
+    background: #2b221d;
+    color: var(--brand);
+}
+
+[data-theme="dark"] .admin-breadcrumb {
+    color: #9c8d80;
+}
+
+[data-theme="dark"] .admin-card {
+    background: #1c1815;
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .admin-card h2 {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .admin-help {
+    color: #a8988a;
+}
+
+[data-theme="dark"] .admin-form label {
+    color: #ded6cc;
+}
+
+[data-theme="dark"] .admin-form input:not([type=checkbox]):not([type=color]):not([type=file]),
+[data-theme="dark"] .admin-form select,
+[data-theme="dark"] .admin-form textarea {
+    background: #14110f;
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .admin-form input:read-only {
+    background: #1e1916;
+    color: #9c8d80;
+}
+
+[data-theme="dark"] .admin-button {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .admin-button:hover:enabled {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .admin-button.primary {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .admin-button.primary:hover:enabled {
+    filter: brightness(1.1);
+}
+
+[data-theme="dark"] .identity-upload {
+    background: #14110f;
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .table-item {
+    background: #1c1815;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .table-item-body {
+    border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .table-item-name {
+    color: #f7f3ee;
+}
+
+[data-theme="dark"] .table-status.free {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ded6cc;
+}
+
+/* 4.1 Admin: Formulários de produtos, mídias e utilitários Tailwind no modo escuro */
+[data-theme="dark"] .admin-app .bg-stone-50 {
+    background-color: #1e1916 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-theme="dark"] .admin-app .bg-white {
+    background-color: #1c1815 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app li.bg-white,
+[data-theme="dark"] .admin-app article.bg-white {
+    background-color: #241e1a !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-theme="dark"] .admin-app input.bg-white,
+[data-theme="dark"] .admin-app textarea.bg-white,
+[data-theme="dark"] .admin-app select.bg-white,
+[data-theme="dark"] .admin-app input[type="search"],
+[data-theme="dark"] .admin-app input[type="number"],
+[data-theme="dark"] .admin-app input[type="text"],
+[data-theme="dark"] .admin-app input[type="date"] {
+    background-color: #14110f !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app input[type="file"] {
+    color: #ded6cc !important;
+}
+
+[data-theme="dark"] .admin-app input[type="file"]::file-selector-button {
+    background-color: #2c241e !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app input[type="file"]::-webkit-file-upload-button {
+    background-color: #2c241e !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app button.border-black\/20,
+[data-theme="dark"] .admin-app a.border-black\/20 {
+    background-color: #28211c !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app button.border-black\/20:hover:not(:disabled),
+[data-theme="dark"] .admin-app a.border-black\/20:hover {
+    background-color: #382e27 !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+[data-theme="dark"] .admin-app button:disabled {
+    opacity: 0.45;
+}
+
+[data-theme="dark"] .admin-app .catalog-card {
+    background-color: #1c1815 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app .catalog-card h3 {
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app .catalog-editor-preview {
+    background-color: #1c1815 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-theme="dark"] .admin-app .catalog-editor-preview h3,
+[data-theme="dark"] .admin-app .catalog-editor-preview strong {
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app .catalog-editor-preview p {
+    color: #bfaea0 !important;
+}
+
+[data-theme="dark"] .admin-app .panel {
+    background: #1c1815 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: #ded6cc !important;
+}
+
+[data-theme="dark"] .admin-app .opacity-75 {
+    color: #b5a596 !important;
+    opacity: 1 !important;
+}
+
+[data-theme="dark"] .admin-app .border-black\/10,
+[data-theme="dark"] .admin-app .border-black\/20,
+[data-theme="dark"] .admin-app .border-t.border-black\/10 {
+    border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+/* Chips e badges de status no admin */
+[data-theme="dark"] .admin-app .bg-stone-100 {
+    background-color: #2b231d !important;
+    color: #ded6cc !important;
+}
+
+[data-theme="dark"] .admin-app .bg-green-50 {
+    background-color: rgba(46, 125, 50, 0.18) !important;
+    color: #81c784 !important;
+}
+
+[data-theme="dark"] .admin-app .bg-amber-50 {
+    background-color: rgba(245, 124, 0, 0.18) !important;
+    color: #ffb74d !important;
+}
+
+[data-theme="dark"] .admin-app .bg-red-50 {
+    background-color: rgba(211, 47, 47, 0.2) !important;
+    color: #ef9a9a !important;
+}
+
+/* Moderação de comentários no Admin */
+[data-theme="dark"] .admin-app .admin-comment-card {
+    background-color: #1e1916 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-theme="dark"] .admin-app .admin-comment-card strong {
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app .admin-comment-card span {
+    color: #b5a596 !important;
+}
+
+[data-theme="dark"] .admin-app .admin-modal-card {
+    background-color: #1e1916 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app .admin-modal-card h3 {
+    color: #f7f3ee !important;
+}
+
+[data-theme="dark"] .admin-app .admin-modal-card p,
+[data-theme="dark"] .admin-app .admin-modal-card div {
+    color: #ded6cc !important;
+}
+
+/* ==========================================================================
+   Microanimação: ConfettiBurst (Discreta, 1.2s, acessível)
+   ========================================================================== */
+.confetti-burst-container {
+    position: absolute;
+    top: 90px;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 60;
+}
+
+.confetti-particle {
+    position: absolute;
+    width: var(--width, var(--size, 6px));
+    height: var(--height, calc(var(--size, 6px) * 1.5));
+    background-color: var(--color, var(--brand));
+    border-radius: 2px;
+    opacity: 0;
+    animation: confetti-burst-anim 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: var(--delay, 0ms);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes confetti-burst-anim {
+    0% {
+        opacity: 1;
+        transform: translate(0, 0) rotate(0deg) scale(0.6);
+    }
+    60% {
+        opacity: 0.95;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(var(--target-x), var(--target-y)) rotate(var(--target-rot)) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .confetti-burst-container {
+        display: none !important;
     }
 }

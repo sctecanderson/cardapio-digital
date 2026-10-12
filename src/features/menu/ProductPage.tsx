@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router';
 import { usePublicMenu, PublicMenuStatus } from './PublicMenuProvider';
 import type { Product } from '../../types/menu';
 import { shareProduct } from './productShare';
-import { useTableContext } from '../tables/useTableContext';
+import { useTableContext, getTableQueryString } from '../tables/useTableContext';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
 import { ServiceActionPopup, type ServiceActionType } from '../service/ServiceActionPopup';
 
@@ -47,7 +47,7 @@ function ProductNavIcon({ name }: { name: 'home' | 'waiter' | 'bill' }) {
 export function ProductPage() {
   const table = useTableContext();
   const { restaurant } = useRestaurant();
-  const tableQuery = table.status === 'unverified' ? `?mesa=${table.tableNumber}` : '';
+  const tableQuery = getTableQueryString(table);
   const { restaurantSlug = '', productSlug = '' } = useParams();
 
   const [activeImage, setActiveImage] = useState(0);
@@ -225,7 +225,18 @@ export function ProductPage() {
       {/* Card Principal de Detalhes */}
       <article className="product-card">
         <div className="product-header-group">
-          <h1 className="product-title">{product.name}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="product-title m-0">{product.name}</h1>
+            {!product.available && (
+              <span
+                role="status"
+                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/50"
+                aria-label="Item indisponível no momento"
+              >
+                Indisponível no momento
+              </span>
+            )}
+          </div>
 
           <div className="product-meta-row">
             <button
@@ -351,13 +362,17 @@ export function ProductPage() {
         </div>
       </article>
 
-      {/* Aviso: Faça seu pedido com o garçom */}
-      <div className="product-order-notice">
+      {/* Aviso: Faça seu pedido com o garçom ou aviso de indisponibilidade */}
+      <div className="product-order-notice" role="status" aria-live="polite">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
-        <span>Faça seu pedido com o garçom.</span>
+        <span>
+          {product.available
+            ? "Faça seu pedido com o garçom."
+            : "Este item está temporariamente indisponível para pedidos."}
+        </span>
       </div>
 
       {/* Dock / Barra de ações inferior flutuante */}

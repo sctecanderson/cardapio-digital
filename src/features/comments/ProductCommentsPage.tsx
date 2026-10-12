@@ -9,7 +9,7 @@ import {
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { usePublicMenu, PublicMenuStatus } from '../menu/PublicMenuProvider';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
-import { useTableContext } from '../tables/useTableContext';
+import { useTableContext, getTableQueryString } from '../tables/useTableContext';
 import {
   formatRelativeCommentDate,
   getSavedProductCommentDraft,
@@ -30,6 +30,7 @@ import type {
   ProductCommentsCursor,
   PublicProductComment,
 } from '../../types/menu';
+import { ThemeToggleButton } from '../theme/ThemeToggleButton';
 
 export function ProductCommentsPage() {
   const { restaurantSlug = '', productId = '' } = useParams();
@@ -37,7 +38,7 @@ export function ProductCommentsPage() {
   const location = useLocation();
   const table = useTableContext();
   const { restaurant } = useRestaurant();
-  const tableQuery = table.status === 'unverified' ? `?mesa=${table.tableNumber}` : '';
+  const tableQuery = getTableQueryString(table);
 
   const catalog = usePublicMenu();
   const {
@@ -394,12 +395,15 @@ export function ProductCommentsPage() {
           </span>
         </div>
 
-        <span
-          className="product-comments-full-count-pill"
-          aria-label={`${approvedTotal} comentários aprovados`}
-        >
-          {approvedTotal}
-        </span>
+        <div className="product-comments-full-header-actions">
+          <span
+            className="product-comments-full-count-pill"
+            aria-label={`${approvedTotal} comentários aprovados`}
+          >
+            {approvedTotal}
+          </span>
+          <ThemeToggleButton className="product-comments-theme-toggle" />
+        </div>
       </header>
 
       {/* 2. Lista de comentários com paginação */}

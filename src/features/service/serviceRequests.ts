@@ -7,7 +7,7 @@ export interface ServiceRequest {
     restaurant_table_id: string;
     table_visit_id: string | null;
     request_type: 'waiter' | 'bill';
-    status: 'pending' | 'attended' | 'cancelled';
+    status: 'pending' | 'attended' | 'completed' | 'cancelled';
     created_at: string;
     resolved_at: string | null;
     resolved_by_member_id: string | null;
@@ -90,6 +90,7 @@ function parseServiceRequest(value: unknown): ServiceRequest {
         (
             status !== 'pending' &&
             status !== 'attended' &&
+            status !== 'completed' &&
             status !== 'cancelled'
         ) ||
         typeof created_at !== 'string' ||
@@ -357,4 +358,154 @@ export async function attendWaiterRequest(
     }
 
     return request;
+}
+
+export async function completeWaiterRequest(
+    restaurantSlug: string,
+    serviceRequestId: string,
+): Promise<ServiceRequest> {
+    if (!serviceRequestId.trim()) {
+        throw new Error('Informe o chamado que deseja concluir.');
+    }
+
+    const { data, error } = await supabase
+        .rpc('complete_waiter_request', {
+            p_restaurant_slug: restaurantSlug,
+            p_service_request_id: serviceRequestId,
+        })
+        .single()
+        .overrideTypes<ServiceRequest, { merge: false }>();
+
+    if (error) {
+        if (error.code === '42501' || error.code === '22023') {
+            throw new Error(error.message);
+        }
+
+        throw new Error(
+            'Não foi possível concluir o atendimento. Tente novamente.',
+        );
+    }
+
+    const request = parseServiceRequest(data);
+
+    if (
+        request.id !== serviceRequestId ||
+        request.request_type !== 'waiter' ||
+        request.status !== 'completed'
+    ) {
+        throw new Error(
+            'A conclusão do atendimento não foi confirmada pelo servidor.',
+        );
+    }
+
+    return request;
+}
+
+export async function listActiveWaiterRequests(
+    restaurantId: string,
+): Promise<PendingWaiterRequest[]> {
+    const { data, error } = await supabase
+        .from('service_requests')
+        .select(`
+            *,
+            table:restaurant_tables!inner(table_number),
+            visit:table_visits(assigned_member_id)
+        `)
+        .eq('restaurant_id', restaurantId)
+        .eq('request_type', 'waiter')
+        .in('status', ['pending', 'attended'])
+        .order('created_at', { ascending: true })
+        .overrideTypes<PendingWaiterRequest[], { merge: false }>();
+
+    if (error) {
+        throw new Error(
+            'Não foi possível carregar os chamados. Tente novamente.',
+        );
+    }
+
+    return data ?? [];
+}
+
+export async function dismissTableServiceRequests(
+    restaurantSlug: string,
+    tableNumber: number,
+): Promise<number> {
+    validateTableNumber(tableNumber);
+
+    const { data, error } = await supabase.rpc(
+        'dismiss_table_service_requests',
+        {
+            p_restaurant_slug: restaurantSlug,
+            p_table_number: tableNumber,
+        },
+    );
+
+    if (error) {
+        if (error.code === '42501' || error.code === '22023') {
+            throw new Error(error.message);
+        }
+
+        throw new Error(
+            'Não foi possível encerrar os chamados da mesa. Tente novamente.',
+        );
+    }
+
+    return typeof data === 'number' ? data : 0;
+}
+
+export interface TableServiceRequestsSummary {
+    pendingCount: number;
+    attendedCount: number;
+    totalCount: number;
+}
+
+export async function getTableServiceRequestsSummary(
+    restaurantId: string,
+    tableNumber: number,
+): Promise<TableServiceRequestsSummary> {
+    validateTableNumber(tableNumber);
+
+    const { data, error } = await supabase
+        .from('service_requests')
+        .select(`
+            id,
+            status,
+            table:restaurant_tables!inner(table_number)
+        `)
+        .eq('restaurant_id', restaurantId)
+        .eq('table.table_number', tableNumber)
+        .in('status', ['pending', 'attended']);
+
+    if (error || !Array.isArray(data)) {
+        return {
+            pendingCount: 0,
+            attendedCount: 0,
+            totalCount: 0,
+        };
+    }
+
+    let pendingCount = 0;
+    let attendedCount = 0;
+
+    for (const item of data) {
+        if (item.status === 'pending') {
+            pendingCount += 1;
+        } else if (item.status === 'attended') {
+            attendedCount += 1;
+        }
+    }
+
+    return {
+        pendingCount,
+        attendedCount,
+        totalCount: pendingCount + attendedCount,
+    };
+}
+
+export async function countActiveTableServiceRequests(
+    restaurantId: string,
+    tableNumber: number,
+): Promise<number> {
+    const summary = await getTableServiceRequestsSummary(restaurantId, tableNumber);
+    return summary.totalCount;
 }

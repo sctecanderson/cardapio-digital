@@ -15,8 +15,10 @@ import {
 import { PublicMenuProvider } from "../features/menu/PublicMenuProvider";
 import { MenuPage } from "../features/menu/MenuPage";
 import { HomePage } from "../features/menu/HomePage";
-import { useTableContext } from "../features/tables/useTableContext";
+import { useTableContext, getTableQueryString } from "../features/tables/useTableContext";
 import { RequireStaffAccess } from "../features/auth/RequireStaffAccess";
+import { ThemeProvider, useTheme } from "../features/theme/ThemeContext";
+import { ThemeToggleButton } from "../features/theme/ThemeToggleButton";
 
 const ProductPage = lazy(() =>
   import("../features/menu/ProductPage").then((m) => ({
@@ -129,9 +131,11 @@ const StaffInvitationPage = lazy(() =>
 function RestaurantRoot() {
   const { restaurantSlug = "" } = useParams();
   return (
-    <RestaurantProvider key={restaurantSlug} slug={restaurantSlug}>
-      <Outlet />
-    </RestaurantProvider>
+    <ThemeProvider>
+      <RestaurantProvider key={restaurantSlug} slug={restaurantSlug}>
+        <Outlet />
+      </RestaurantProvider>
+    </ThemeProvider>
   );
 }
 
@@ -146,9 +150,9 @@ function PublicMenuLayout() {
 
 function RestaurantLayout() {
   const table = useTableContext();
-  const tableQuery =
-    table.status === "unverified" ? `?mesa=${table.tableNumber}` : "";
+  const tableQuery = getTableQueryString(table);
   const { restaurant } = useRestaurant();
+  const { theme: themeMode } = useTheme();
   const location = useLocation();
   useEffect(() => {
     document.title = restaurant
@@ -156,16 +160,18 @@ function RestaurantLayout() {
       : "Restaurante não encontrado";
   }, [restaurant]);
 
+  const isDark = themeMode === 'dark';
   const theme = {
     "--brand": restaurant.theme.primary,
-    "--page": restaurant.theme.background,
-    "--ink": restaurant.theme.text,
+    "--page": isDark ? "#14110f" : restaurant.theme.background,
+    "--ink": isDark ? "#f7f3ee" : restaurant.theme.text,
   } as CSSProperties;
   const isExplore = location.pathname.split("/")[2] === "explorar";
   const isProduct = location.pathname.split("/")[2] === "produto";
+  const isEquipe = location.pathname.split("/")[2] === "equipe";
   if (isExplore) {
     return (
-      <div className="restaurant explore-viewport" style={theme}>
+      <div className="restaurant explore-viewport" data-theme={themeMode} style={theme}>
         <a href="#content" className="skip-link">Pular para o feed</a>
         <main id="content" className="explore-main">
           <Suspense fallback={<div className="shell py-8 text-center"><p role="status" className="text-xs opacity-60">Carregando feed…</p></div>}>
@@ -177,7 +183,7 @@ function RestaurantLayout() {
   }
   if (isProduct) {
     return (
-      <div className="restaurant product-viewport" style={theme}>
+      <div className="restaurant product-viewport" data-theme={themeMode} style={theme}>
         <a href="#content" className="skip-link">Pular para o produto</a>
         <main id="content" className="product-main">
           <Suspense fallback={<div className="shell py-8 text-center"><p role="status" className="text-xs opacity-60">Carregando produto…</p></div>}>
@@ -189,7 +195,7 @@ function RestaurantLayout() {
   }
   if (location.pathname.split("/")[2] === "admin")
     return (
-      <div className="restaurant" style={theme}>
+      <div className="restaurant" data-theme={themeMode} style={theme}>
         <Suspense
           fallback={
             <p className="shell py-8" role="status">
@@ -201,9 +207,8 @@ function RestaurantLayout() {
         </Suspense>
       </div>
     );
-  const isEquipe = location.pathname.split("/")[2] === "equipe";
   return (
-    <div className="restaurant public-site" style={theme}>
+    <div className={`restaurant ${isEquipe ? 'staff-site' : 'public-site'}`} data-theme={themeMode} style={theme}>
       <a href="#content" className="skip-link">
         Pular para o conteúdo
       </a>
@@ -229,15 +234,18 @@ function RestaurantLayout() {
                   </>
                 )}
               </Link>
-              {!isEquipe && (
-                <span className="badge public-table-badge">
-                  {table.status === "unverified"
-                    ? `Mesa ${table.tableNumber}`
-                    : table.status === "invalid"
-                      ? "Mesa inválida"
-                      : "Consulta sem mesa"}
-                </span>
-              )}
+              <div className="public-header-actions">
+                {!isEquipe && (
+                  <span className="badge public-table-badge">
+                    {table.status === "unverified"
+                      ? `Mesa ${table.tableNumber}`
+                      : table.status === "invalid"
+                        ? "Mesa inválida"
+                        : "Consulta sem mesa"}
+                  </span>
+                )}
+                <ThemeToggleButton />
+              </div>
             </header>
             {isEquipe ? (
               <nav className="tabs public-tabs" aria-label="Navegação da equipe">

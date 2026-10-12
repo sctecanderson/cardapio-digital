@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
-import { useTableContext } from '../tables/useTableContext';
+import { useTableContext, getTableQueryString } from '../tables/useTableContext';
 import { ServiceActionPopup, type ServiceActionType } from '../service/ServiceActionPopup';
 import { usePublicMenu, PublicMenuStatus } from './PublicMenuProvider';
 import type { Product } from '../../types/menu';
@@ -135,9 +135,7 @@ export function HomePage() {
   const [activeBanner, setActiveBanner] = useState(0);
   const [activeAction, setActiveAction] = useState<ServiceActionType>(null);
   const bannerRail = useRef<HTMLDivElement>(null);
-  const tableQuery = table.status === 'unverified'
-    ? `?mesa=${table.tableNumber}`
-    : '';
+  const tableQuery = getTableQueryString(table);
 
   if (!menu) return <PublicMenuStatus />;
 

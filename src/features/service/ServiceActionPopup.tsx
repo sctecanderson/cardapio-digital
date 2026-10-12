@@ -12,6 +12,7 @@ import type { WaiterRequestState } from './serviceRequests';
 import { getGuestTabState } from './guestTab';
 import { requestBill, getBillRequestState, cancelBillRequest } from './billRequests';
 import type { BillRequest } from './billRequests';
+import { ConfettiBurst } from './ConfettiBurst';
 
 export type ServiceActionType = 'waiter' | 'bill' | null;
 
@@ -90,7 +91,84 @@ export function ServiceActionPopup({
         return () => clearInterval(interval);
     }, [isOpen]);
 
-    // Carregar estado do Garçom ao abrir
+    // Rastrear IDs de chamados pendentes e celebrados (em memória + sessionStorage)
+    // para disparar confetes exatamente uma vez por confirmação real e nunca repetir em F5
+    const [activeConfettiKey, setActiveConfettiKey] = useState<string | null>(null);
+    const seenPendingIdsRef = useRef<Set<string>>(new Set());
+    const celebratedIdsRef = useRef<Set<string>>(new Set());
+    const prevWaiterStatusRef = useRef<string | null>(null);
+    const prevBillStatusRef = useRef<string | null>(null);
+
+    // Helper para persistir em sessionStorage os IDs pendentes e celebrados na sessão
+    const storageNamespace = restaurantSlug && tableNumber > 0
+        ? `elozi:confetti:${restaurantSlug}:${tableNumber}`
+        : null;
+
+    function isRequestCelebrated(requestId: string): boolean {
+        if (celebratedIdsRef.current.has(requestId)) return true;
+        if (!storageNamespace) return false;
+        try {
+            const raw = window.sessionStorage.getItem(`${storageNamespace}:celebrated`);
+            if (!raw) return false;
+            const list: unknown = JSON.parse(raw);
+            if (Array.isArray(list) && list.includes(requestId)) {
+                celebratedIdsRef.current.add(requestId);
+                return true;
+            }
+        } catch {
+            // Ignora falha de sessionStorage
+        }
+        return false;
+    }
+
+    function markRequestCelebrated(requestId: string): void {
+        celebratedIdsRef.current.add(requestId);
+        if (!storageNamespace) return;
+        try {
+            const raw = window.sessionStorage.getItem(`${storageNamespace}:celebrated`);
+            const list: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+            if (!list.includes(requestId)) {
+                list.push(requestId);
+                window.sessionStorage.setItem(`${storageNamespace}:celebrated`, JSON.stringify(list.slice(-30)));
+            }
+        } catch {
+            // Ignora falha de sessionStorage
+        }
+    }
+
+    function wasRequestSeenPending(requestId: string): boolean {
+        if (seenPendingIdsRef.current.has(requestId)) return true;
+        if (!storageNamespace) return false;
+        try {
+            const raw = window.sessionStorage.getItem(`${storageNamespace}:pending`);
+            if (!raw) return false;
+            const list: unknown = JSON.parse(raw);
+            if (Array.isArray(list) && list.includes(requestId)) {
+                seenPendingIdsRef.current.add(requestId);
+                return true;
+            }
+        } catch {
+            // Ignora falha de sessionStorage
+        }
+        return false;
+    }
+
+    function markRequestSeenPending(requestId: string): void {
+        seenPendingIdsRef.current.add(requestId);
+        if (!storageNamespace) return;
+        try {
+            const raw = window.sessionStorage.getItem(`${storageNamespace}:pending`);
+            const list: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+            if (!list.includes(requestId)) {
+                list.push(requestId);
+                window.sessionStorage.setItem(`${storageNamespace}:pending`, JSON.stringify(list.slice(-30)));
+            }
+        } catch {
+            // Ignora falha de sessionStorage
+        }
+    }
+
+    // Carregar estado do Garçom ao abrir e escutar mudanças
     useEffect(() => {
         if (!isOpen || !restaurantSlug || table.status !== 'unverified') return;
 
@@ -124,13 +202,21 @@ export function ServiceActionPopup({
             )
             .subscribe();
 
+        // Polling ativo a cada 4s para garantir atualização mesmo em conexões instáveis
+        const pollInterval = window.setInterval(() => {
+            if (!document.hidden) {
+                void fetchWaiter();
+            }
+        }, 4000);
+
         return () => {
             disposed = true;
+            window.clearInterval(pollInterval);
             void supabase.removeChannel(channel);
         };
     }, [isOpen, restaurantSlug, table.status, tableNumber]);
 
-    // Carregar estado da Conta ao abrir
+    // Carregar estado da Conta ao abrir e escutar mudanças
     useEffect(() => {
         if (!isOpen || mode !== 'bill' || !restaurantSlug || table.status !== 'unverified') return;
 
@@ -158,10 +244,92 @@ export function ServiceActionPopup({
         }
 
         void fetchTabAndBill();
+
+        const channel = supabase
+            .channel(`popup-bill:${restaurantSlug}:${tableNumber}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'service_requests',
+                },
+                () => {
+                    void fetchTabAndBill();
+                },
+            )
+            .subscribe();
+
+        const pollInterval = window.setInterval(() => {
+            if (!document.hidden) {
+                void fetchTabAndBill();
+            }
+        }, 4000);
+
         return () => {
             disposed = true;
+            window.clearInterval(pollInterval);
+            void supabase.removeChannel(channel);
         };
     }, [isOpen, mode, restaurantSlug, table.status, tableNumber]);
+
+    // Monitorar transição para attended e disparar rajada única por confirmação real da equipe
+    useEffect(() => {
+        if (!isOpen) {
+            setActiveConfettiKey(null);
+            prevWaiterStatusRef.current = null;
+            prevBillStatusRef.current = null;
+            return;
+        }
+
+        const currentWaiter = waiterState.request;
+        const prevWaiterStatus = prevWaiterStatusRef.current;
+        const currWaiterStatus = currentWaiter?.status ?? null;
+
+        if (currentWaiter) {
+            if (currentWaiter.status === 'pending') {
+                markRequestSeenPending(currentWaiter.id);
+            } else if (currentWaiter.status === 'attended' && mode === 'waiter') {
+                if (!isRequestCelebrated(currentWaiter.id)) {
+                    const resolvedMs = currentWaiter.resolved_at ? Date.parse(currentWaiter.resolved_at) : 0;
+                    const recentlyAttended = resolvedMs > 0 && Date.now() - resolvedMs < 30_000;
+                    const shouldCelebrate =
+                        wasRequestSeenPending(currentWaiter.id) ||
+                        recentlyAttended ||
+                        prevWaiterStatus === 'pending';
+                    markRequestCelebrated(currentWaiter.id);
+                    if (shouldCelebrate) {
+                        setActiveConfettiKey(`waiter:${currentWaiter.id}`);
+                    }
+                }
+            }
+        }
+        prevWaiterStatusRef.current = currWaiterStatus;
+
+        const currentBill = billRequest;
+        const prevBillStatus = prevBillStatusRef.current;
+        const currBillStatus = currentBill?.status ?? null;
+
+        if (currentBill) {
+            if (currentBill.status === 'pending') {
+                markRequestSeenPending(currentBill.id);
+            } else if (currentBill.status === 'attended' && mode === 'bill') {
+                if (!isRequestCelebrated(currentBill.id)) {
+                    const resolvedMs = currentBill.resolved_at ? Date.parse(currentBill.resolved_at) : 0;
+                    const recentlyAttended = resolvedMs > 0 && Date.now() - resolvedMs < 30_000;
+                    const shouldCelebrate =
+                        wasRequestSeenPending(currentBill.id) ||
+                        recentlyAttended ||
+                        prevBillStatus === 'pending';
+                    markRequestCelebrated(currentBill.id);
+                    if (shouldCelebrate) {
+                        setActiveConfettiKey(`bill:${currentBill.id}`);
+                    }
+                }
+            }
+        }
+        prevBillStatusRef.current = currBillStatus;
+    }, [isOpen, mode, waiterState.request, billRequest]);
 
     if (!mode) return null;
 
@@ -262,8 +430,15 @@ export function ServiceActionPopup({
         : 0;
 
     const isBillPending = billRequest?.status === 'pending';
-    const billElapsedSeconds = isBillPending && billRequest
-        ? Math.max(0, Math.floor((now - Date.parse(billRequest.created_at)) / 1000))
+    const isBillAttended = billRequest?.status === 'attended';
+
+    // Se pendente, avança em tempo real. Se assumido/atendido, congela na data de resolução (resolved_at).
+    const billElapsedSeconds = billRequest
+        ? isBillPending
+            ? Math.max(0, Math.floor((now - Date.parse(billRequest.created_at)) / 1000))
+            : isBillAttended && billRequest.resolved_at
+                ? Math.max(0, Math.floor((Date.parse(billRequest.resolved_at) - Date.parse(billRequest.created_at)) / 1000))
+                : 0
         : 0;
 
     return (
@@ -277,6 +452,13 @@ export function ServiceActionPopup({
             }}
         >
             <div className="service-popup-card">
+                {activeConfettiKey && (
+                    <ConfettiBurst
+                        key={activeConfettiKey}
+                        onDone={() => setActiveConfettiKey(null)}
+                    />
+                )}
+
                 {/* Drag handle superior */}
                 <div className="service-popup-handle" aria-hidden="true" />
 
@@ -294,7 +476,7 @@ export function ServiceActionPopup({
                    MODAL GARÇOM: ESTADO 3 - CHAMADO ASSUMIDO
                    ========================================================= */}
                 {mode === 'waiter' && isWaiterAttended && (
-                    <div className="service-popup-body">
+                    <div className="service-popup-body relative">
                         <div className="service-popup-icon-bubble">
                             {/* Ilustração do Garçom com bandeja/cloche */}
                             <svg viewBox="0 0 64 64" fill="none" className="service-popup-svg" aria-hidden="true">
@@ -314,7 +496,7 @@ export function ServiceActionPopup({
                             Chamado assumido
                         </h2>
 
-                        <div className="service-popup-badge">
+                        <div className="service-popup-badge attended">
                             Em atendimento
                         </div>
 
@@ -469,7 +651,44 @@ export function ServiceActionPopup({
                             </svg>
                         </div>
 
-                        {isBillPending ? (
+                        {isBillAttended ? (
+                            <div className="relative w-full">
+                                <h2 id="service-popup-title" className="service-popup-title">
+                                    Conta em atendimento
+                                </h2>
+                                <div className="service-popup-badge attended">
+                                    Garçom a caminho
+                                </div>
+                                <p className="service-popup-desc">
+                                    Um funcionário assumiu o fechamento da {tableLabel} e está a caminho com a sua conta.
+                                </p>
+                                {billElapsedSeconds > 0 && (
+                                    <div className="service-popup-timer">
+                                        Tempo de espera: {formatElapsed(billElapsedSeconds)}{' '}
+                                        <span aria-hidden="true">⏱️</span>
+                                    </div>
+                                )}
+
+                                {restaurant.serviceFeePercent > 0 && billRequest && (
+                                    <p className="text-xs text-[#8c7867] mt-1 text-center font-medium">
+                                        Taxa de serviço ({restaurant.serviceFeePercent}%):{' '}
+                                        <strong className="text-[#3d271d]">
+                                            {billRequest.include_service_fee ? 'Incluída' : 'Não incluída'}
+                                        </strong>
+                                    </p>
+                                )}
+
+                                <div className="service-popup-actions single">
+                                    <button
+                                        type="button"
+                                        className="service-popup-btn solid"
+                                        onClick={onClose}
+                                    >
+                                        Continuar no cardápio
+                                    </button>
+                                </div>
+                            </div>
+                        ) : isBillPending ? (
                             <>
                                 <h2 id="service-popup-title" className="service-popup-title">
                                     Conta solicitada
@@ -553,27 +772,27 @@ export function ServiceActionPopup({
                                 </p>
 
                                 {restaurant.serviceFeePercent > 0 && (
-                                    <div className="mt-4 mb-2 space-y-2 text-left">
-                                        <p className="text-xs font-semibold text-[#5c493a]">
+                                    <div className="service-fee-group" role="radiogroup" aria-labelledby="service-fee-legend-label">
+                                        <p id="service-fee-legend-label" className="service-fee-legend">
                                             Taxa de serviço sugerida ({restaurant.serviceFeePercent}%):
                                         </p>
-                                        <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${includeServiceFee === true ? 'border-[#b9472b] bg-[#fff6f2] font-semibold text-[#3d271d]' : 'border-[#ded5c8] bg-white text-[#5c493a]'}`}>
+                                        <label className={`service-fee-option ${includeServiceFee === true ? 'is-selected' : ''}`}>
                                             <input
                                                 type="radio"
                                                 name="popup-service-fee"
                                                 checked={includeServiceFee === true}
                                                 onChange={() => setIncludeServiceFee(true)}
-                                                className="accent-[#b9472b]"
+                                                className="service-fee-radio"
                                             />
                                             <span>Incluir taxa sugerida (+{restaurant.serviceFeePercent}%)</span>
                                         </label>
-                                        <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${includeServiceFee === false ? 'border-[#b9472b] bg-[#fff6f2] font-semibold text-[#3d271d]' : 'border-[#ded5c8] bg-white text-[#5c493a]'}`}>
+                                        <label className={`service-fee-option ${includeServiceFee === false ? 'is-selected' : ''}`}>
                                             <input
                                                 type="radio"
                                                 name="popup-service-fee"
                                                 checked={includeServiceFee === false}
                                                 onChange={() => setIncludeServiceFee(false)}
-                                                className="accent-[#b9472b]"
+                                                className="service-fee-radio"
                                             />
                                             <span>Pagar apenas o consumo (sem taxa)</span>
                                         </label>

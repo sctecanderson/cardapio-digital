@@ -884,6 +884,181 @@ assert.equal(rangeTokyo.nextDayStartUtc, '2026-10-10T15:00:00.000Z');
 
 console.log('PASS: Função getTimezoneUtcRange validada em viradas de dia, mês, ano e horários de verão/inverno.');
 
+console.log('\n--- Teste 9: Ciclo Completo de Atendimento do Garçom (pending -> attended -> completed -> novo chamado) ---');
+const waiterGuestId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const waiterStaffId = '11111111-1111-1111-1111-111111111111';
+
+await runAsSuperuser(async () => {
+    await q(`insert into auth.users (id, is_anonymous) values ('${waiterGuestId}', true) on conflict do nothing;`);
+    await q(`insert into auth.users (id, is_anonymous) values ('${waiterStaffId}', false) on conflict do nothing;`);
+    await q(`
+        insert into public.restaurant_members (restaurant_id, user_id, role, active)
+        values ('${demoRest.id}', '${waiterStaffId}', 'waiter', true)
+        on conflict do nothing;
+    `);
+});
+
+// 9.1 Cliente anônimo chama garçom na mesa 1
+const reqWaiter1 = await runAsGuest(waiterGuestId, async () => {
+    const res = await q(`select public.request_waiter('brasa', 1) as data;`);
+    return res[0].data;
+});
+assert.equal(reqWaiter1.status, 'created');
+assert.ok(reqWaiter1.request.id);
+const firstRequestId = reqWaiter1.request.id;
+
+// 9.2 Garçom atende o chamado
+const attendRes = await runAsStaff(waiterStaffId, 'waiter', async () => {
+    const res = await q(`select * from public.attend_waiter_request('brasa', $1::uuid);`, [firstRequestId]);
+    return res[0];
+});
+assert.equal(attendRes.status, 'attended');
+
+// 9.3 Garçom conclui o atendimento (chegou à mesa)
+const completeRes = await runAsStaff(waiterStaffId, 'waiter', async () => {
+    const res = await q(`select * from public.complete_waiter_request('brasa', $1::uuid);`, [firstRequestId]);
+    return res[0];
+});
+assert.equal(completeRes.status, 'completed');
+
+// 9.4 Cliente consulta get_waiter_request_state: deve retornar request = null (liberado para novo chamado!)
+const waiterStateAfterComplete = await runAsGuest(waiterGuestId, async () => {
+    const res = await q(`select public.get_waiter_request_state('brasa', 1) as data;`);
+    return res[0].data;
+});
+assert.equal(waiterStateAfterComplete.request, null);
+
+// 9.5 Cliente faz novo chamado: deve gerar novo ciclo com ID diferente sem apagar histórico!
+const reqWaiter2 = await runAsGuest(waiterGuestId, async () => {
+    const res = await q(`select public.request_waiter('brasa', 1) as data;`);
+    return res[0].data;
+});
+assert.equal(reqWaiter2.status, 'created');
+assert.notEqual(reqWaiter2.request.id, firstRequestId);
+
+// 9.6 Verificar histórico: ambos os chamados estão preservados na tabela
+const historyCount = await runAsSuperuser(async () => {
+    const res = await q(`select count(*)::int as total from public.service_requests where restaurant_id = '${demoRest.id}' and restaurant_table_id = (select id from public.restaurant_tables where restaurant_id = '${demoRest.id}' and table_number = 1 limit 1);`);
+    return res[0].total;
+});
+assert.ok(historyCount >= 2);
+console.log('PASS: Ciclo completo do chamado validado com sucesso (pending -> attended -> completed -> novo chamado independente com histórico preservado).');
+
+console.log('\n--- Teste 10: Segurança, Atribuição e Permissões entre Garçons e Administrador ---');
+const waiterStaffId2 = '22222222-2222-2222-2222-222222222222';
+
+await runAsSuperuser(async () => {
+    await q(`insert into auth.users (id, is_anonymous) values ('${waiterStaffId2}', false) on conflict do nothing;`);
+    await q(`
+        insert into public.restaurant_members (restaurant_id, user_id, role, active)
+        values ('${demoRest.id}', '${waiterStaffId2}', 'waiter', true)
+        on conflict do nothing;
+    `);
+});
+
+// 10.1 Garçom 1 assume o novo chamado (reqWaiter2)
+const attendRes2 = await runAsStaff(waiterStaffId, 'waiter', async () => {
+    const res = await q(`select * from public.attend_waiter_request('brasa', $1::uuid);`, [reqWaiter2.request.id]);
+    return res[0];
+});
+assert.equal(attendRes2.status, 'attended');
+
+// 10.2 Garçom 2 TENTA concluir o atendimento assumido pelo Garçom 1: DEVE FALHAR com 42501!
+let otherWaiterBlocked = false;
+try {
+    await runAsStaff(waiterStaffId2, 'waiter', async () => {
+        await q(`select * from public.complete_waiter_request('brasa', $1::uuid);`, [reqWaiter2.request.id]);
+    });
+} catch (err) {
+    otherWaiterBlocked = err.code === '42501' || err.message.includes('responsável ou um administrador');
+}
+assert.ok(otherWaiterBlocked, 'Outro garçom não deve conseguir concluir atendimento alheio');
+console.log('PASS: Outro garçom é estritamente impedido de concluir atendimento alheio (42501).');
+
+// 10.3 Administrador executa conclusão excepcional: DEVE TER SUCESSO!
+const adminComplete = await runAsStaff(adminUserId, 'admin', async () => {
+    const res = await q(`select * from public.complete_waiter_request('brasa', $1::uuid);`, [reqWaiter2.request.id]);
+    return res[0];
+});
+assert.equal(adminComplete.status, 'completed');
+console.log('PASS: Administrador autorizado pode concluir atendimento excepcionalmente.');
+
+console.log('\n--- Teste 11: Encerramento de Mesa, Proteção Financeira e Cancelamento de Chamados ---');
+// 11.1 Criar atendimento da mesa 2 com comanda aberta e chamado pendente
+const waiterGuestId2 = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+await runAsSuperuser(async () => {
+    await q(`insert into auth.users (id, is_anonymous) values ('${waiterGuestId2}', true) on conflict do nothing;`);
+});
+
+const visitMesa2 = await runAsStaff(waiterStaffId, 'waiter', async () => {
+    const res = await q(`select * from public.open_table_visit('brasa', 2);`);
+    return res[0];
+});
+
+// Criar comanda aberta na mesa 2
+const tabIdMesa2 = '33333333-3333-3333-3333-333333333333';
+const tabMesa2 = await runAsStaff(waiterStaffId, 'waiter', async () => {
+    const res = await q(`select * from public.create_table_tab('brasa', $1::uuid, 'Comanda 1', $2::uuid);`, [visitMesa2.id, tabIdMesa2]);
+    return res[0];
+});
+
+// Cliente chama garçom na mesa 2
+const reqWaiterMesa2 = await runAsGuest(waiterGuestId2, async () => {
+    const res = await q(`select public.request_waiter('brasa', 2) as data;`);
+    return res[0].data;
+});
+assert.equal(reqWaiterMesa2.status, 'created');
+
+// 11.2 Tentativa de fechar a mesa com comanda aberta: DEVE FALHAR (exige fechar comandas primeiro!)
+let closeBlockedWithOpenTab = false;
+try {
+    await runAsStaff(waiterStaffId, 'waiter', async () => {
+        await q(`select * from public.close_table_visit('brasa', $1::uuid);`, [visitMesa2.id]);
+    });
+} catch (err) {
+    closeBlockedWithOpenTab = err.code === '22023' && err.message.includes('Encerre todas as comandas abertas');
+}
+assert.ok(closeBlockedWithOpenTab, 'Fechamento de mesa deve ser estritamente bloqueado quando há comandas abertas');
+console.log('PASS: Bloqueio financeiro garantido — mesa não pode ser fechada com comandas abertas.');
+
+// 11.3 Fechar comanda da mesa 2 (taxa dispensada pela equipe)
+await runAsStaff(waiterStaffId, 'waiter', async () => {
+    await q(`select * from public.close_table_tab('brasa', $1::uuid, false);`, [tabMesa2.id]);
+});
+
+// 11.4 Fechar mesa agora: DEVE TER SUCESSO e cancelar automaticamente o chamado em aberto da mesa!
+const closedVisitMesa2 = await runAsStaff(waiterStaffId, 'waiter', async () => {
+    const res = await q(`select * from public.close_table_visit('brasa', $1::uuid);`, [visitMesa2.id]);
+    return res[0];
+});
+assert.equal(closedVisitMesa2.status, 'closed');
+
+// Verificar se o chamado da mesa 2 foi cancelado
+const [mesa2ReqStatus] = await runAsSuperuser(async () => {
+    return q(`select status from public.service_requests where id = $1::uuid;`, [reqWaiterMesa2.request.id]);
+});
+assert.equal(mesa2ReqStatus.status, 'cancelled');
+console.log('PASS: Fechamento de mesa autorizado cancela automaticamente chamados em aberto e preserva histórico.');
+
+// 11.5 Testar RPC dismiss_table_service_requests (ação excepcional por mesa)
+const reqWaiterMesa3 = await runAsGuest(waiterGuestId, async () => {
+    const res = await q(`select public.request_waiter('brasa', 3) as data;`);
+    return res[0].data;
+});
+assert.equal(reqWaiterMesa3.status, 'created');
+
+const dismissedCount = await runAsStaff(adminUserId, 'admin', async () => {
+    const res = await q(`select public.dismiss_table_service_requests('brasa', 3) as count;`);
+    return res[0].count;
+});
+assert.ok(dismissedCount >= 1);
+
+const [mesa3ReqStatus] = await runAsSuperuser(async () => {
+    return q(`select status from public.service_requests where id = $1::uuid;`, [reqWaiterMesa3.request.id]);
+});
+assert.equal(mesa3ReqStatus.status, 'cancelled');
+console.log('PASS: RPC dismiss_table_service_requests encerra chamados da mesa selecionada com rastreabilidade.');
+
 console.log('\n======================================================');
-console.log('TODOS OS TESTES DO BLOCO 4 FORAM APROVADOS COM SUCESSO!');
+console.log('TODOS OS TESTES DO BLOCO 4 E GESTÃO DE CHAMADOS FORAM APROVADOS COM SUCESSO!');
 console.log('======================================================');

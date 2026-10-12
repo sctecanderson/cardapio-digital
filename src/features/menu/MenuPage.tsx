@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { usePublicMenu, PublicMenuStatus } from './PublicMenuProvider';
 import type { Product } from '../../types/menu';
-import { useTableContext } from '../tables/useTableContext';
+import { useTableContext, getTableQueryString } from '../tables/useTableContext';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
 import { ServiceActionPopup, type ServiceActionType } from '../service/ServiceActionPopup';
 
@@ -82,7 +82,7 @@ function RestaurantMenuContent({
 }) {
   const table = useTableContext();
   const { restaurant } = useRestaurant();
-  const tableQuery = table.status === 'unverified' ? `?mesa=${table.tableNumber}` : '';
+  const tableQuery = getTableQueryString(table);
 
   const [query, setQuery] = useState('');
   const [categoryId, setCategoryId] = useState('all');

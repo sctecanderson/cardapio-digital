@@ -126,48 +126,48 @@ function StaffLogin({ restaurantSlug }: { restaurantSlug: string }) {
   return (
     <section
       aria-labelledby="staff-access-title"
-      className="mx-auto max-w-md rounded-2xl border border-current/15 bg-white p-6"
+      className="staff-access-card mx-auto max-w-md rounded-2xl border p-6"
     >
-      <h1 id="staff-access-title" className="text-2xl font-bold">
+      <h1 id="staff-access-title" className="staff-access-title text-2xl font-bold">
         Acesso da equipe
       </h1>
 
-      <p className="mt-2 text-sm">{restaurant?.name ?? "Restaurante"}</p>
+      <p className="staff-access-subtitle mt-2 text-sm">{restaurant?.name ?? "Restaurante"}</p>
 
       {error && (
         <p
           role="alert"
-          className="mt-5 rounded-xl border border-red-700 bg-red-50 p-3 text-sm text-red-800"
+          className="mt-5 rounded-xl border border-red-700 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200 dark:border-red-700/50"
         >
           {error}
         </p>
       )}
 
       {checkingSession ? (
-        <p role="status" className="mt-6">
+        <p role="status" className="staff-access-text mt-6">
           Verificando acesso…
         </p>
       ) : access ? (
         <div className="mt-6">
-          <p role="status" className="font-semibold">
+          <p role="status" className="staff-access-status font-semibold">
             Acesso autorizado.
           </p>
 
-          <p className="mt-2 text-sm">
+          <p className="staff-access-role mt-2 text-sm">
             Perfil: {access.role === "admin" ? "Administrador" : "Garçom"}
           </p>
 
           <div className="mt-4 flex flex-wrap gap-3">
             <Link
               to={`/${restaurantSlug}/equipe`}
-              className="inline-flex min-h-11 items-center rounded-xl border border-current px-4 py-2 font-medium"
+              className="staff-access-btn-outline inline-flex min-h-11 items-center rounded-xl border px-4 py-2 font-medium"
             >
               Atendimento
             </Link>
             {access.role === "admin" && (
               <Link
                 to={`/${restaurantSlug}/admin`}
-                className="inline-flex min-h-11 items-center rounded-xl bg-[var(--brand)] px-4 py-2 font-medium text-white"
+                className="inline-flex min-h-11 items-center rounded-xl bg-[var(--brand)] px-4 py-2 font-medium text-white hover:brightness-105"
               >
                 Administrar catálogo
               </Link>
@@ -178,7 +178,7 @@ function StaffLogin({ restaurantSlug }: { restaurantSlug: string }) {
             type="button"
             onClick={() => void handleSignOut()}
             disabled={busy}
-            className="mt-6 min-h-11 w-full rounded-xl border border-current px-4 py-3 font-semibold disabled:opacity-60"
+            className="staff-access-btn-signout mt-6 min-h-11 w-full rounded-xl border px-4 py-3 font-semibold disabled:opacity-60"
           >
             {busy ? "Saindo…" : "Sair"}
           </button>
@@ -191,7 +191,7 @@ function StaffLogin({ restaurantSlug }: { restaurantSlug: string }) {
             <div>
               <label
                 htmlFor="staff-email"
-                className="block text-sm font-semibold"
+                className="staff-access-label block text-sm font-semibold"
               >
                 E-mail
               </label>
@@ -206,14 +206,14 @@ function StaffLogin({ restaurantSlug }: { restaurantSlug: string }) {
                 required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="mt-2 min-h-11 w-full rounded-xl border border-current/30 bg-white px-4 py-3 text-base"
+                className="staff-access-input mt-2 min-h-11 w-full rounded-xl border px-4 py-3 text-base"
               />
             </div>
 
             <div>
               <label
                 htmlFor="staff-password"
-                className="block text-sm font-semibold"
+                className="staff-access-label block text-sm font-semibold"
               >
                 Senha
               </label>
@@ -226,13 +226,13 @@ function StaffLogin({ restaurantSlug }: { restaurantSlug: string }) {
                 required
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="mt-2 min-h-11 w-full rounded-xl border border-current/30 bg-white px-4 py-3 text-base"
+                className="staff-access-input mt-2 min-h-11 w-full rounded-xl border px-4 py-3 text-base"
               />
             </div>
 
             <button
               type="submit"
-              className="min-h-11 w-full rounded-xl bg-[var(--brand)] px-4 py-3 font-semibold text-white disabled:opacity-60"
+              className="min-h-11 w-full rounded-xl bg-[var(--brand)] px-4 py-3 font-semibold text-white disabled:opacity-60 hover:brightness-105"
             >
               {busy ? "Entrando…" : "Entrar"}
             </button>

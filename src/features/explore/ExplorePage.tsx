@@ -20,7 +20,7 @@ import {
 } from '../comments/exploreNavigation';
 import { usePublicMenu, PublicMenuStatus } from '../menu/PublicMenuProvider';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
-import { useTableContext } from '../tables/useTableContext';
+import { useTableContext, getTableQueryString } from '../tables/useTableContext';
 import { ExploreMedia } from './ExploreMedia';
 import { shareProduct } from '../menu/productShare';
 
@@ -108,9 +108,7 @@ export function ExplorePage() {
 function ExploreFeed({ restaurantSlug }: { restaurantSlug: string }) {
     useRestaurant();
     const table = useTableContext();
-    const tableQuery = table.status === 'unverified'
-        ? `?mesa=${table.tableNumber}`
-        : '';
+    const tableQuery = getTableQueryString(table);
     const screenRef = useRef<HTMLElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const commentButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});

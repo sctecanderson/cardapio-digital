@@ -199,6 +199,21 @@ export function AdminCommentsPage() {
     }
   };
 
+  // Suporte a teclado: fecha modais de confirmação com Escape
+  useEffect(() => {
+    if (!commentToDelete && !termToDelete) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        if (!deletePending && !termActionBusy) {
+          setCommentToDelete(null);
+          setTermToDelete(null);
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [commentToDelete, termToDelete, deletePending, termActionBusy]);
+
   // Exclusão definitiva de comentário
   const handleConfirmDeleteComment = async () => {
     if (!restaurantSlug || !commentToDelete) return;
@@ -869,6 +884,7 @@ export function AdminCommentsPage() {
           }}
         >
           <div
+            className="admin-modal-card"
             style={{
               background: '#fff',
               borderRadius: '16px',
@@ -959,6 +975,7 @@ export function AdminCommentsPage() {
           }}
         >
           <div
+            className="admin-modal-card"
             style={{
               background: '#fff',
               borderRadius: '16px',

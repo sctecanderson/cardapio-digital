@@ -3,6 +3,11 @@ import { Link } from "react-router";
 import { useRestaurant } from "../restaurants/RestaurantProvider";
 import { getAdminTables, saveTable, type AdminTable } from "./restaurantAdmin";
 import { AdminIcon } from "./AdminLayout";
+import {
+  getTableServiceRequestsSummary,
+  dismissTableServiceRequests,
+  type TableServiceRequestsSummary,
+} from "../service/serviceRequests";
 const money = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -19,6 +24,13 @@ export function TablesPage() {
   const [draft, setDraft] = useState<AdminTable | null>(null);
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
+
+  // Gerenciamento de chamados por mesa no Admin
+  const [tableRequestsSummary, setTableRequestsSummary] =
+    useState<TableServiceRequestsSummary | null>(null);
+  const [loadingRequestsSummary, setLoadingRequestsSummary] = useState(false);
+  const [confirmDismissRequests, setConfirmDismissRequests] = useState(false);
+  const [dismissingRequests, setDismissingRequests] = useState(false);
   useEffect(() => {
     let disposed = false;
     setLoading(true);
@@ -90,6 +102,50 @@ export function TablesPage() {
     setDraft({ ...t });
     setError("");
     setNotice("");
+    setConfirmDismissRequests(false);
+    setTableRequestsSummary(null);
+
+    // Carrega chamados da mesa se for uma mesa já existente
+    if (t.revision > 0) {
+      setLoadingRequestsSummary(true);
+      void getTableServiceRequestsSummary(r.id, t.tableNumber)
+        .then((summary) => {
+          setTableRequestsSummary(summary);
+        })
+        .catch(() => {
+          setTableRequestsSummary(null);
+        })
+        .finally(() => {
+          setLoadingRequestsSummary(false);
+        });
+    }
+  }
+
+  async function handleDismissTableRequests() {
+    if (!draft || dismissingRequests) return;
+    setDismissingRequests(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const dismissed = await dismissTableServiceRequests(r.slug, draft.tableNumber);
+      setConfirmDismissRequests(false);
+      setNotice(
+        `Chamados da Mesa ${String(draft.tableNumber).padStart(2, "0")} encerrados com sucesso (${dismissed} encerrado${dismissed > 1 ? "s" : ""}).`,
+      );
+      // Atualiza o resumo de chamados imediatamente
+      const updated = await getTableServiceRequestsSummary(r.id, draft.tableNumber);
+      setTableRequestsSummary(updated);
+      setRevision((v) => v + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível encerrar os chamados da mesa.",
+      );
+    } finally {
+      setDismissingRequests(false);
+    }
   }
   return (
     <div className="admin-stack">
@@ -185,6 +241,83 @@ export function TablesPage() {
               Desativar preserva o histórico. Mesas com histórico mantêm o
               número para proteger os QR Codes existentes.
             </p>
+
+            {/* Gerenciamento de chamados da mesa */}
+            {draft.revision > 0 && (
+              <div className="admin-card" style={{ marginTop: "16px", marginBottom: "16px", padding: "16px", background: "var(--surface-raised, rgba(0,0,0,0.03))", border: "1px solid var(--line, rgba(0,0,0,0.1))", borderRadius: "12px" }}>
+                <h3 style={{ fontSize: "15px", fontWeight: "600", marginBottom: "8px" }}>
+                  Gerenciamento de chamados da mesa
+                </h3>
+                {loadingRequestsSummary ? (
+                  <p role="status" className="admin-help">
+                    Consultando chamados da Mesa {String(draft.tableNumber).padStart(2, "0")}…
+                  </p>
+                ) : (
+                  <div>
+                    <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "12px", fontSize: "13px" }}>
+                      <div>
+                        <span className="admin-help">Pendentes: </span>
+                        <strong>{tableRequestsSummary?.pendingCount ?? 0}</strong>
+                      </div>
+                      <div>
+                        <span className="admin-help">Em atendimento: </span>
+                        <strong>{tableRequestsSummary?.attendedCount ?? 0}</strong>
+                      </div>
+                      <div>
+                        <span className="admin-help">Total ativos: </span>
+                        <strong>{tableRequestsSummary?.totalCount ?? 0}</strong>
+                      </div>
+                    </div>
+
+                    {(tableRequestsSummary?.totalCount ?? 0) > 0 ? (
+                      confirmDismissRequests ? (
+                        <div style={{ padding: "12px", borderRadius: "8px", background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.35)" }}>
+                          <p style={{ fontSize: "13px", fontWeight: "600", color: "var(--ink, #1f2937)", marginBottom: "6px" }}>
+                            Confirmar encerramento de {tableRequestsSummary?.totalCount} chamado(s) da Mesa {String(draft.tableNumber).padStart(2, "0")}?
+                          </p>
+                          <p style={{ fontSize: "12px", color: "var(--ink-secondary, #4b5563)", marginBottom: "10px" }}>
+                            Esta ação cancela chamados pendentes e em atendimento desta mesa sem fechar comandas nem apagar histórico.
+                          </p>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <button
+                              type="button"
+                              className="admin-button primary"
+                              disabled={dismissingRequests}
+                              onClick={() => void handleDismissTableRequests()}
+                            >
+                              {dismissingRequests ? "Encerrando…" : "Confirmar encerramento"}
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-button"
+                              disabled={dismissingRequests}
+                              onClick={() => setConfirmDismissRequests(false)}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="admin-button"
+                          style={{ borderColor: "rgba(245, 158, 11, 0.5)", color: "var(--ink, #1f2937)" }}
+                          disabled={dismissingRequests}
+                          onClick={() => setConfirmDismissRequests(true)}
+                        >
+                          Encerrar {tableRequestsSummary?.totalCount} chamado(s) em aberto desta mesa
+                        </button>
+                      )
+                    ) : (
+                      <p className="admin-help" style={{ margin: 0 }}>
+                        Nenhum chamado de garçom ativo para esta mesa no momento.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="admin-actions">
               <button
                 type="button"

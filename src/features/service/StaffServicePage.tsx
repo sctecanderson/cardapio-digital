@@ -14,6 +14,10 @@ import { WaiterRequestsPanel } from './WaiterRequestsPanel';
 import { BillRequestsPanel } from './BillRequestsPanel';
 import { ConfirmedGuestCount } from './ConfirmedGuestCount';
 import { TableTabsPanel } from './TableTabsPanel';
+import {
+    countActiveTableServiceRequests,
+    dismissTableServiceRequests,
+} from './serviceRequests';
 
 export function StaffServicePage() {
     const { restaurantSlug } = useParams();
@@ -29,6 +33,7 @@ export function StaffServicePage() {
             restaurantSlug={restaurantSlug}
             restaurantId={access.restaurantId}
             memberId={access.memberId}
+            role={access.role}
         />
     );
 }
@@ -37,10 +42,12 @@ function StaffSalonManager({
     restaurantSlug,
     restaurantId,
     memberId,
+    role,
 }: {
     restaurantSlug: string;
     restaurantId: string;
     memberId: string;
+    role: 'admin' | 'waiter';
 }) {
     const submitting = useRef(false);
     const salonInitialLoaded = useRef(false);
@@ -57,6 +64,7 @@ function StaffSalonManager({
 
     // Quantidade de comandas abertas na mesa selecionada
     const [openTabsCount, setOpenTabsCount] = useState<number>(0);
+    const [activeRequestsOnTable, setActiveRequestsOnTable] = useState<number>(0);
 
     const handleOpenTabsCountChange = useCallback((count: number) => {
         setOpenTabsCount(count);
@@ -66,6 +74,36 @@ function StaffSalonManager({
     const [busyAction, setBusyAction] = useState(false);
     const [actionError, setActionError] = useState('');
     const [confirmCloseMesa, setConfirmCloseMesa] = useState(false);
+    const [confirmDismissRequests, setConfirmDismissRequests] = useState(false);
+
+    // Carregar quantidade de chamados ativos na mesa selecionada
+    useEffect(() => {
+        if (selectedTableNumber === null) {
+            setActiveRequestsOnTable(0);
+            return;
+        }
+
+        let disposed = false;
+        async function fetchTableRequestsCount() {
+            try {
+                const count = await countActiveTableServiceRequests(
+                    restaurantId,
+                    selectedTableNumber!,
+                );
+                if (!disposed) {
+                    setActiveRequestsOnTable(count);
+                }
+            } catch {
+                // Silencia falha transitória
+            }
+        }
+
+        void fetchTableRequestsCount();
+
+        return () => {
+            disposed = true;
+        };
+    }, [restaurantId, selectedTableNumber, refresh]);
 
     // Horário formatado no topo (atualiza a cada 30 segundos)
     const [currentTime, setCurrentTime] = useState(() => {
@@ -265,6 +303,30 @@ function StaffSalonManager({
         }
     }
 
+    // Ação excepcional: Encerrar chamados em aberto desta mesa específica
+    async function handleDismissTableRequests(tableNum: number) {
+        if (submitting.current || busyAction) return;
+
+        submitting.current = true;
+        setBusyAction(true);
+        setActionError('');
+
+        try {
+            await dismissTableServiceRequests(restaurantSlug, tableNum);
+            setConfirmDismissRequests(false);
+            setRefresh((c) => c + 1);
+        } catch (cause) {
+            setActionError(
+                cause instanceof Error
+                    ? cause.message
+                    : 'Não foi possível encerrar os chamados da mesa.',
+            );
+        } finally {
+            submitting.current = false;
+            setBusyAction(false);
+        }
+    }
+
     // Estado vazio: Nenhuma mesa cadastrada no restaurante
     if (!loading && allTables.length === 0) {
         return (
@@ -408,6 +470,57 @@ function StaffSalonManager({
                         </p>
                     )}
 
+                    {/* Gerenciamento centralizado de chamados da mesa selecionada */}
+                    {activeRequestsOnTable > 0 && (role === 'admin' || isMyVisit || isTableFree) && (
+                        <div className="mt-4 rounded-2xl border border-amber-300/80 bg-amber-50/90 p-3 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                                <div>
+                                    <span className="font-semibold text-amber-950">
+                                        Chamados desta mesa:
+                                    </span>{' '}
+                                    <span className="text-amber-900 font-bold">
+                                        {activeRequestsOnTable} ativo{activeRequestsOnTable > 1 ? 's' : ''}
+                                    </span>
+                                </div>
+                                {!confirmDismissRequests && (
+                                    <button
+                                        type="button"
+                                        disabled={busyAction}
+                                        onClick={() => setConfirmDismissRequests(true)}
+                                        className="rounded-lg bg-amber-700 hover:bg-amber-800 px-2.5 py-1 text-xs font-semibold text-white transition-colors disabled:opacity-50"
+                                    >
+                                        Encerrar chamados
+                                    </button>
+                                )}
+                            </div>
+                            {confirmDismissRequests && (
+                                <div className="mt-2 pt-2 border-t border-amber-200">
+                                    <p className="text-amber-900 mb-2">
+                                        Encerrar {activeRequestsOnTable} chamado(s) da Mesa {String(selectedTableNumber).padStart(2, '0')}? A ação cancela chamados pendentes/em atendimento sem fechar comandas.
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            disabled={busyAction}
+                                            onClick={() => void handleDismissTableRequests(selectedTableNumber!)}
+                                            className="rounded-lg bg-amber-700 hover:bg-amber-800 px-3 py-1 font-medium text-white transition-colors disabled:opacity-50"
+                                        >
+                                            {busyAction ? 'Encerrando…' : 'Confirmar encerramento'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={busyAction}
+                                            onClick={() => setConfirmDismissRequests(false)}
+                                            className="rounded-lg border border-amber-300 bg-white px-3 py-1 font-medium text-amber-900"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Caso A: Mesa Livre */}
                     {isTableFree && (
                         <div className="mt-4 rounded-2xl bg-[#fff8ef] p-4 border border-[#e8dac8] text-center">
@@ -475,14 +588,19 @@ function StaffSalonManager({
                                     </div>
                                 ) : null}
 
-                                {confirmCloseMesa ? (
+                                 {confirmCloseMesa ? (
                                     <div className="rounded-2xl bg-red-50 p-4 border border-red-200">
                                         <p className="text-sm font-bold text-red-900 mb-1">
                                             Encerrar o atendimento da Mesa {String(selectedTableNumber).padStart(2, '0')}?
                                         </p>
-                                        <p className="text-xs text-red-800 mb-4">
+                                        <p className="text-xs text-red-800 mb-2">
                                             Todas as sessões dos clientes vinculados a esta mesa serão revogadas.
                                         </p>
+                                        {activeRequestsOnTable > 0 && (
+                                            <p className="text-xs font-semibold text-red-900 mb-3 bg-red-100/70 p-2 rounded-lg">
+                                                ℹ️ {activeRequestsOnTable} chamado(s) ou pedido(s) em aberto desta mesa serão encerrados automaticamente.
+                                            </p>
+                                        )}
                                         <div className="flex gap-2">
                                             <button
                                                 type="button"
@@ -504,23 +622,25 @@ function StaffSalonManager({
                                         </div>
                                     </div>
                                 ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (openTabsCount > 0) {
-                                                setActionError(`Existem ${openTabsCount} comanda(s) aberta(s). Encerre todas as comandas antes de finalizar o atendimento da mesa.`);
-                                                return;
-                                            }
-                                            setConfirmCloseMesa(true);
-                                            setActionError('');
-                                        }}
-                                        disabled={busyAction || openTabsCount > 0}
-                                        className={`staff-full-close-btn ${openTabsCount > 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                    >
-                                        {openTabsCount > 0
-                                            ? `Encerre as comandas para finalizar a mesa (${openTabsCount} aberta${openTabsCount > 1 ? 's' : ''})`
-                                            : 'Encerrar atendimento da mesa'}
-                                    </button>
+                                    <div className="space-y-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (openTabsCount > 0) {
+                                                    setActionError(`Existem ${openTabsCount} comanda(s) aberta(s). Encerre todas as comandas antes de finalizar o atendimento da mesa.`);
+                                                    return;
+                                                }
+                                                setConfirmCloseMesa(true);
+                                                setActionError('');
+                                            }}
+                                            disabled={busyAction || openTabsCount > 0}
+                                            className={`staff-full-close-btn ${openTabsCount > 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                        >
+                                            {openTabsCount > 0
+                                                ? `Encerre as comandas para finalizar a mesa (${openTabsCount} aberta${openTabsCount > 1 ? 's' : ''})`
+                                                : 'Encerrar atendimento da mesa'}
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         </>
@@ -536,6 +656,7 @@ function StaffSalonManager({
                     restaurantSlug={restaurantSlug}
                     restaurantId={restaurantId}
                     memberId={memberId}
+                    role={role}
                     onAttended={() => {
                         setRefresh((current) => current + 1);
                     }}
