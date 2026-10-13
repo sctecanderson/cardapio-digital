@@ -61,3 +61,15 @@ export function useTableContext(): TableContext {
     tableNumber: String(number).padStart(2, '0'),
   };
 }
+
+/**
+ * Retorna a query string canônica para preservação de mesa na navegação interna.
+ * Retorna `?mesa=XX` somente se o status for `unverified` e a mesa for válida.
+ * Retorna string vazia caso a mesa esteja ausente ou inválida.
+ */
+export function getTableQueryString(table: TableContext | null | undefined): string {
+  if (table && table.status === 'unverified' && table.tableNumber) {
+    return `?mesa=${table.tableNumber}`;
+  }
+  return '';
+}

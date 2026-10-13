@@ -1,197 +1,81 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { menus } from '../../data/menu';
-import type { Product, ProductImage } from '../../types/menu';
-import { useTableContext } from '../tables/useTableContext';
+import { usePublicMenu, PublicMenuStatus } from './PublicMenuProvider';
+import type { Product } from '../../types/menu';
+import { shareProduct } from './productShare';
+import { useTableContext, getTableQueryString } from '../tables/useTableContext';
+import { useRestaurant } from '../restaurants/RestaurantProvider';
+import { ServiceActionPopup, type ServiceActionType } from '../service/ServiceActionPopup';
 
 const currency = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
 });
 
-function GalleryImage({ image }: { image: ProductImage }) {
-  const [failed, setFailed] = useState(false);
-
-  if (failed) {
-    return (
-      <div
-        className="flex aspect-[4/3] items-center justify-center bg-[#F1E8DE] p-6 text-center text-[#62564B]"
-        role="img"
-        aria-label={image.alt}
-      >
-        Foto em preparação
-      </div>
-    );
+function formatLikes(count: number) {
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1).replace('.0', '')}k`;
   }
-
-  return (
-    <img
-      src={image.url}
-      alt={image.alt}
-      className="aspect-[4/3] w-full object-cover"
-      loading="lazy"
-      decoding="async"
-      onError={() => setFailed(true)}
-    />
-  );
+  return String(Math.max(0, count));
 }
 
-function ProductGallery({ product }: { product: Product }) {
-  const [activeIndex, setActiveIndex] = useState(0);
+type ProductAction = 'waiter' | 'bill' | null;
 
-  const images = [...product.images].sort((a, b) => {
-    if (a.id === product.coverImageId) return -1;
-    if (b.id === product.coverImageId) return 1;
-    return a.sortOrder - b.sortOrder;
-  });
-
-  function moveTo(
-    container: HTMLDivElement,
-    index: number,
-  ) {
-    const target = container.children.item(index);
-
-    if (!(target instanceof HTMLElement)) return;
-
-    const reducedMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches;
-
-    container.scrollTo({
-      left: target.offsetLeft,
-      behavior: reducedMotion ? 'instant' : 'smooth',
-    });
-  }
-
-  if (images.length === 0) {
-    return (
-      <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-[#F1E8DE]">
-        Foto em preparação
-      </div>
-    );
-  }
-
+function ProductNavIcon({ name }: { name: 'home' | 'waiter' | 'bill' }) {
+  if (name === 'home') return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
+    </svg>
+  );
+  if (name === 'waiter') return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
   return (
-    <section aria-label={`Fotos de ${product.name}`}>
-      <div
-        className="relative flex snap-x snap-mandatory overflow-x-auto rounded-2xl"
-        role="region"
-        aria-label="Galeria de fotos. Deslize para os lados."
-        tabIndex={0}
-        onScroll={(event) => {
-          const container = event.currentTarget;
-          const width = container.clientWidth;
-
-          if (width === 0) return;
-
-          const index = Math.round(container.scrollLeft / width);
-
-          setActiveIndex(
-            Math.max(0, Math.min(images.length - 1, index)),
-          );
-        }}
-        onKeyDown={(event) => {
-          const direction =
-            event.key === 'ArrowRight'
-              ? 1
-              : event.key === 'ArrowLeft'
-                ? -1
-                : 0;
-
-          if (!direction) return;
-
-          event.preventDefault();
-
-          moveTo(
-            event.currentTarget,
-            Math.max(
-              0,
-              Math.min(images.length - 1, activeIndex + direction),
-            ),
-          );
-        }}
-      >
-        {images.map((image) => (
-          <div
-            key={image.id}
-            className="w-full shrink-0 snap-start snap-always"
-          >
-            <GalleryImage key={image.url} image={image} />
-          </div>
-        ))}
-      </div>
-
-      {images.length > 1 && (
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            disabled={activeIndex === 0}
-            aria-label="Foto anterior"
-            className="min-h-11 rounded-lg border border-[#DED7CD] px-4 disabled:opacity-40"
-            onClick={(event) => {
-              const container =
-                event.currentTarget.parentElement
-                  ?.previousElementSibling;
-
-              if (container instanceof HTMLDivElement) {
-                moveTo(container, activeIndex - 1);
-              }
-            }}
-          >
-            ← Anterior
-          </button>
-
-          <span className="text-sm" role="status">
-            {activeIndex + 1} de {images.length}
-          </span>
-
-          <button
-            type="button"
-            disabled={activeIndex === images.length - 1}
-            aria-label="Próxima foto"
-            className="min-h-11 rounded-lg border border-[#DED7CD] px-4 disabled:opacity-40"
-            onClick={(event) => {
-              const container =
-                event.currentTarget.parentElement
-                  ?.previousElementSibling;
-
-              if (container instanceof HTMLDivElement) {
-                moveTo(container, activeIndex + 1);
-              }
-            }}
-          >
-            Próxima →
-          </button>
-        </div>
-      )}
-    </section>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <polyline points="10 9 9 9 8 9" />
+    </svg>
   );
 }
 
 export function ProductPage() {
   const table = useTableContext();
+  const { restaurant } = useRestaurant();
+  const tableQuery = getTableQueryString(table);
+  const { restaurantSlug = '', productSlug = '' } = useParams();
 
-  const tableQuery =
-    table.status === 'unverified'
-      ? `?mesa=${table.tableNumber}`
-      : '';
-  const {
-    restaurantSlug = '',
-    productSlug = '',
-  } = useParams();
+  const [activeImage, setActiveImage] = useState(0);
+  const [restrictionsOpen, setRestrictionsOpen] = useState(false);
+  const [activeAction, setActiveAction] = useState<ServiceActionType>(null);
+  const galleryRail = useRef<HTMLDivElement>(null);
 
-  const product = menus[restaurantSlug]?.products.find(
-    (item) => item.slug === productSlug,
-  );
+  const catalog = usePublicMenu();
+  const product = catalog.menu?.products.find((item) => item.slug === productSlug);
+
+  useEffect(() => {
+    if (!catalog.likeError) return;
+    const timer = window.setTimeout(() => {
+      catalog.clearLikeError();
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [catalog.likeError, catalog.clearLikeError]);
+
+  if (!catalog.menu) return <PublicMenuStatus />;
 
   if (!product) {
     return (
-      <section className="panel">
+      <section className="home-promo-empty">
         <h1>Produto não encontrado</h1>
-        <p>Este produto não está disponível neste endereço.</p>
+        <p>Este produto não está disponível no cardápio.</p>
         <Link
-          to={`/${restaurantSlug}${tableQuery}`}
-          className="mt-4 inline-block underline"
+          to={`/${restaurantSlug}/cardapio${tableQuery}`}
+          className="home-explore-link mt-4 inline-block"
         >
           Voltar ao cardápio
         </Link>
@@ -199,71 +83,317 @@ export function ProductPage() {
     );
   }
 
+  const images = [...product.images].sort((a, b) => {
+    if (a.id === product.coverImageId) return -1;
+    if (b.id === product.coverImageId) return 1;
+    return a.sortOrder - b.sortOrder;
+  });
+
+  const isLiked = catalog.isProductLiked(product.id);
+  const isLikePending = catalog.isProductLikePending(product.id);
+  const likesCount = catalog.getProductLikesCount(product.id);
+  const likesLabel = likesCount === 1 ? '1 curtida' : `${formatLikes(likesCount)} curtidas`;
+
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const shareNoticeTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (shareNoticeTimerRef.current !== null) {
+        window.clearTimeout(shareNoticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  const showShareNotice = (message: string) => {
+    if (shareNoticeTimerRef.current !== null) {
+      window.clearTimeout(shareNoticeTimerRef.current);
+    }
+    setShareNotice(message);
+    shareNoticeTimerRef.current = window.setTimeout(() => {
+      setShareNotice(null);
+      shareNoticeTimerRef.current = null;
+    }, 3200);
+  };
+
+  const handleShare = async () => {
+    const result = await shareProduct({
+      restaurantSlug,
+      productSlug: product.slug,
+      productName: product.name,
+      productDescription: product.shortDescription || product.description,
+    });
+    if (result.status !== 'aborted' && result.message) {
+      showShareNotice(result.message);
+    }
+  };
+
+  function scrollToImage(index: number) {
+    const rail = galleryRail.current;
+    const slide = rail?.children.item(index);
+    if (!rail || !(slide instanceof HTMLElement)) return;
+    rail.scrollTo({ left: slide.offsetLeft, behavior: 'smooth' });
+  }
+
   return (
-    <div className="space-y-6">
-      <Link
-        to={`/${restaurantSlug}${tableQuery}`}
-        className="inline-flex min-h-11 items-center underline"
-      >
-        ← Voltar ao cardápio
-      </Link>
-
-      <ProductGallery key={product.id} product={product} />
-
-      <section aria-labelledby="product-title">
-        {product.featured && (
-          <span className="eyebrow">Destaque da casa</span>
-        )}
-
-        <h1 id="product-title">{product.name}</h1>
-
-        <p className="text-2xl font-bold text-[var(--brand)]">
-          {currency.format(product.priceInCents / 100)}
-        </p>
-
-        {!product.available && (
-          <p className="font-medium">Indisponível no momento</p>
-        )}
-
-        <p>{product.description}</p>
-      </section>
-
-      {!!product.variants?.length && (
-        <section className="panel" aria-labelledby="variants-title">
-          <h2 id="variants-title" className="text-lg font-bold">
-            Opções e preços
-          </h2>
-
-          <ul className="mt-3 space-y-3">
-            {product.variants.map((variant) => (
-              <li
-                key={variant.id}
-                className="flex flex-wrap justify-between gap-2"
-              >
-                <span>
-                  {variant.name}
-                  {!variant.available && ' · Indisponível'}
-                </span>
-                <strong>
-                  {currency.format(variant.priceInCents / 100)}
-                </strong>
-              </li>
-            ))}
-          </ul>
-        </section>
+    <div className="product-page">
+      {/* Toast no topo da tela para aviso discreto de compartilhamento */}
+      {shareNotice && (
+        <div
+          className="product-top-toast"
+          role="status"
+          aria-live="polite"
+          onClick={() => setShareNotice(null)}
+        >
+          {shareNotice}
+        </div>
       )}
 
-      <section className="panel" aria-labelledby="dietary-title">
-        <h2 id="dietary-title" className="text-lg font-bold">
-          Ingredientes e restrições
-        </h2>
-        <p>
-          {product.dietaryInformation ||
-            'Consulte a equipe sobre alergênicos e adaptações.'}
-        </p>
-      </section>
+      {/* Imagem / Carrossel com Botões Flutuantes */}
+      <div className="product-gallery-container">
+        {/* Botão ← Voltar */}
+        <Link
+          to={`/${restaurantSlug}/cardapio${tableQuery}`}
+          className="product-top-btn product-back-btn"
+          aria-label="Voltar ao cardápio"
+        >
+          ← voltar
+        </Link>
 
-      <p className="text-sm">Faça seu pedido com o garçom.</p>
+        {/* Botão Compartilhar */}
+        <button
+          type="button"
+          onClick={handleShare}
+          className="product-top-btn product-share-btn"
+          aria-label="Compartilhar prato"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+          </svg>
+        </button>
+
+        {/* Trilho de Fotos Deslizante */}
+        <div
+          ref={galleryRail}
+          className="product-gallery-rail"
+          onScroll={(e) => {
+            const width = e.currentTarget.clientWidth;
+            if (width > 0) {
+              const idx = Math.round(e.currentTarget.scrollLeft / width);
+              setActiveImage(Math.max(0, Math.min(images.length - 1, idx)));
+            }
+          }}
+        >
+          {images.length > 0 ? (
+            images.map((img) => (
+              <div key={img.id} className="product-gallery-slide">
+                <img
+                  src={img.url}
+                  alt={img.alt}
+                  fetchPriority="high"
+                  decoding="async"
+                />
+              </div>
+            ))
+          ) : (
+            <div className="home-dish-placeholder">
+              {product.name}
+            </div>
+          )}
+        </div>
+
+        {/* Bolinhas de paginação da galeria (se houver mais de uma foto) */}
+        {images.length > 1 && (
+          <div className="product-gallery-dots">
+            {images.map((img, i) => (
+              <button
+                key={img.id}
+                type="button"
+                className={i === activeImage ? 'active' : ''}
+                aria-label={`Ver foto ${i + 1}`}
+                onClick={() => scrollToImage(i)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Card Principal de Detalhes */}
+      <article className="product-card">
+        <div className="product-header-group">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="product-title m-0">{product.name}</h1>
+            {!product.available && (
+              <span
+                role="status"
+                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/50"
+                aria-label="Item indisponível no momento"
+              >
+                Indisponível no momento
+              </span>
+            )}
+          </div>
+
+          <div className="product-meta-row">
+            <button
+              type="button"
+              className={`product-meta-item rating product-like-btn ${isLiked ? 'liked' : ''}`}
+              onClick={() => {
+                if (catalog.likeError) catalog.clearLikeError();
+                void catalog.toggleProductLike(product.id);
+              }}
+              disabled={isLikePending}
+              aria-pressed={isLiked}
+              aria-busy={isLikePending}
+              aria-label={`${isLiked ? 'Descurtir' : 'Curtir'} ${product.name} (${likesLabel})`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill={isLiked ? '#e63946' : 'none'}
+                stroke={isLiked ? '#e63946' : 'currentColor'}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+              <span>{likesLabel}</span>
+            </button>
+
+            {product.prepTimeMinMinutes != null && product.prepTimeMaxMinutes != null && (
+              <span
+                className="product-meta-item time"
+                title="Estimativa média de tempo de preparo da cozinha"
+                aria-label={`Preparo estimado: ${
+                  product.prepTimeMinMinutes === product.prepTimeMaxMinutes
+                    ? `${product.prepTimeMinMinutes} minutos`
+                    : `${product.prepTimeMinMinutes} a ${product.prepTimeMaxMinutes} minutos`
+                }`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span>
+                  {product.prepTimeMinMinutes === product.prepTimeMaxMinutes
+                    ? `Preparo: ${product.prepTimeMinMinutes} min`
+                    : `Preparo: ${product.prepTimeMinMinutes}–${product.prepTimeMaxMinutes} min`}
+                </span>
+              </span>
+            )}
+          </div>
+
+          {catalog.likeError && (
+            <div className="product-like-error" role="status" aria-live="polite">
+              <span>{catalog.likeError}</span>
+              <button
+                type="button"
+                onClick={catalog.clearLikeError}
+                aria-label="Fechar aviso"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          <div className="product-price">
+            {currency.format(product.priceInCents / 100)}
+          </div>
+        </div>
+
+        {/* Descrição */}
+        {(product.description || product.shortDescription) && (
+          <div className="product-section">
+            <h2 className="product-section-title">Descrição</h2>
+            <p className="product-section-text">
+              {product.description || product.shortDescription}
+            </p>
+          </div>
+        )}
+
+        {/* Ingredientes / Detalhes Adicionais */}
+        {product.dietaryInformation && (
+          <div className="product-section">
+            <h2 className="product-section-title">Informações Dietéticas e Alergênicos</h2>
+            <div className="product-ingredients-text">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2a9 9 0 0 1 9 9c0 4.97-4.03 9-9 9s-9-4.03-9-9a9 9 0 0 1 9-9z" />
+                <path d="M12 2v18" />
+              </svg>
+              <span>{product.dietaryInformation}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Sanfona de Restrições */}
+        <div className="product-restrictions-accordion">
+          <button
+            type="button"
+            className="product-restrictions-toggle"
+            onClick={() => setRestrictionsOpen((prev) => !prev)}
+            aria-expanded={restrictionsOpen}
+          >
+            <span className="product-restrictions-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+              Ingredientes e restrições
+            </span>
+            <span className={`arrow ${restrictionsOpen ? 'open' : ''}`} aria-hidden="true">∨</span>
+          </button>
+          {restrictionsOpen && (
+            <p className="product-restrictions-content">
+              {product.dietaryInformation || 'Consulte a equipe sobre alergênicos, intolerâncias e adaptações disponíveis.'}
+            </p>
+          )}
+        </div>
+      </article>
+
+      {/* Aviso: Faça seu pedido com o garçom ou aviso de indisponibilidade */}
+      <div className="product-order-notice" role="status" aria-live="polite">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        <span>
+          {product.available
+            ? "Faça seu pedido com o garçom."
+            : "Este item está temporariamente indisponível para pedidos."}
+        </span>
+      </div>
+
+      {/* Dock / Barra de ações inferior flutuante */}
+      <nav className="home-bottom-nav" aria-label="Ações da mesa">
+        <Link to={`/${restaurantSlug}${tableQuery}`}>
+          <ProductNavIcon name="home" /><span>Início</span>
+        </Link>
+        <button type="button" onClick={() => setActiveAction('waiter')}>
+          <ProductNavIcon name="waiter" /><span>Chamar Garçom</span>
+        </button>
+        <Link to={`/${restaurantSlug}/comanda${tableQuery}`}>
+          <ProductNavIcon name="bill" /><span>Comanda</span>
+        </Link>
+      </nav>
+
+      {/* Modal / Dialog de Chamar Garçom e Pedir Conta */}
+      <ServiceActionPopup
+        isOpen={!!activeAction}
+        mode={activeAction}
+        onClose={() => setActiveAction(null)}
+      />
     </div>
   );
 }
