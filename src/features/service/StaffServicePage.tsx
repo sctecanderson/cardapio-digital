@@ -18,6 +18,7 @@ import {
     countActiveTableServiceRequests,
     dismissTableServiceRequests,
 } from './serviceRequests';
+import { WaiterReadyOrdersAlert } from './WaiterReadyOrdersAlert';
 
 export function StaffServicePage() {
     const { restaurantSlug } = useParams();
@@ -357,6 +358,17 @@ function StaffSalonManager({
 
     return (
         <section className="mx-auto max-w-xl pb-12">
+            {/* =========================================================
+                ALERTA DESTACADO: PEDIDOS PRONTOS PARA RETIRAR (KDS)
+               ========================================================= */}
+            <WaiterReadyOrdersAlert
+                restaurantSlug={restaurantSlug}
+                restaurantId={restaurantId}
+                onDelivered={() => {
+                    setRefresh((current) => current + 1);
+                }}
+            />
+
             {/* =========================================================
                 TOPO: MESAS NO SALÃO + CARROSSEL HORIZONTAL
                ========================================================= */}

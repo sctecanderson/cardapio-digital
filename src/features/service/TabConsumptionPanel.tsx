@@ -3,6 +3,8 @@ import type { FormEvent } from 'react';
 import type { TableTab } from './tableTabs';
 import { addTabConsumption, cancelTabConsumption, getTabConsumption } from './tabConsumption';
 import type { ConsumptionProduct, TabConsumptionItem } from './tabConsumption';
+import { advanceKdsItemStatus } from '../kds/kdsService';
+import { groupTabConsumptionItems } from './tabGrouping';
 
 interface Props {
   restaurantSlug: string;
@@ -11,6 +13,7 @@ interface Props {
 }
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const timeFormat = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
 export function TabConsumptionPanel(props: Props) {
   return <ConsumptionContent key={`${props.restaurantId}:${props.tab.id}`} {...props} />;
@@ -34,6 +37,11 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
+  const [expandedBatches, setExpandedBatches] = useState<Record<string, boolean>>({});
+
+  function toggleExpandBatch(key: string) {
+    setExpandedBatches((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
   useEffect(() => {
     mounted.current = true;
@@ -116,6 +124,22 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
     );
   }
 
+  async function handleConfirmDeliveryItems(targetItems: TabConsumptionItem[]) {
+    if (submitting.current || disabled || targetItems.length === 0) return;
+    await perform(
+      async () => {
+        for (const item of targetItems) {
+          const res = await advanceKdsItemStatus(restaurantSlug, item.id, 'delivered');
+          if (!res.success) {
+            throw new Error(res.error || 'Não foi possível confirmar a entrega de todos os itens.');
+          }
+        }
+      },
+      'Entrega na mesa confirmada.',
+      () => {},
+    );
+  }
+
   return (
     <section aria-labelledby={`consumption-title-${tab.id}`} className="mt-3 border-t border-[#ebdccb] pt-3">
       <div className="staff-tab-consume-box">
@@ -195,11 +219,14 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
             <p className="mt-3 text-xs text-[#8c7867] italic">Nenhum consumo registrado.</p>
           ) : (
             <ul className="mt-3 space-y-2">
-              {items.map((item) => {
-                const isCancelled = item.status === 'cancelled';
+              {groupTabConsumptionItems(items).map((group) => {
+                const isCancelled = group.isCancelled;
+                const isExpanded = !!expandedBatches[group.key];
+                const activeCancellingItem = group.originalItems.find((i) => i.id === cancellingId);
+
                 return (
                   <li
-                    key={item.id}
+                    key={group.key}
                     className={`rounded-xl border border-[#ded5c8] p-2.5 text-xs transition-opacity ${
                       isCancelled ? 'opacity-60 bg-[#faf8f5]' : 'bg-white'
                     }`}
@@ -210,7 +237,7 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
                           isCancelled ? 'line-through text-gray-500' : 'text-[#2b1d17]'
                         }`}
                       >
-                        {item.quantity} × {item.product_name}
+                        {group.quantity} × {group.productName}
                       </p>
                       <span
                         className={`${
@@ -219,7 +246,7 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
                             : 'font-bold text-[var(--brand)]'
                         }`}
                       >
-                        {currency.format(item.line_total_in_cents / 100)}
+                        {currency.format(group.lineTotalInCents / 100)}
                       </span>
                     </div>
                     <p
@@ -227,56 +254,161 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
                         isCancelled ? 'line-through text-gray-400' : 'text-[#7a6655]'
                       }`}
                     >
-                      {currency.format(item.unit_price_in_cents / 100)} por unidade
+                      {currency.format(group.unitPriceInCents / 100)} por unidade
+                      {!isCancelled && group.originalItems.length > 1 && (
+                        <span className="ml-2 font-normal text-stone-500">
+                          ({group.originalItems.length} lançamentos somados)
+                        </span>
+                      )}
                     </p>
+                    {!isCancelled && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className={`inline-block px-2 py-0.5 text-[11px] font-medium rounded border ${
+                          group.preparationStation === 'bar'
+                            ? 'bg-orange-50 text-orange-900 border-orange-200'
+                            : group.preparationStation === 'none'
+                              ? 'bg-stone-100 text-stone-700 border-stone-200'
+                              : 'bg-blue-50 text-blue-900 border-blue-200'
+                        }`}>
+                          {group.preparationStation === 'bar'
+                            ? 'Bar'
+                            : group.preparationStation === 'none'
+                              ? 'Sem preparo'
+                              : 'Cozinha'}
+                        </span>
+
+                        <span className={`inline-block px-2 py-0.5 text-[11px] font-medium rounded border ${
+                          group.productionStatus === 'pending'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : group.productionStatus === 'preparing'
+                              ? 'bg-sky-50 text-sky-800 border-sky-200'
+                              : group.productionStatus === 'ready'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold'
+                                : 'bg-stone-100 text-stone-600 border-stone-200'
+                        }`}>
+                          {group.productionStatus === 'pending'
+                            ? 'Aguardando preparo'
+                            : group.productionStatus === 'preparing'
+                              ? 'Em preparo'
+                              : group.productionStatus === 'ready'
+                                ? 'Pronto para entrega'
+                                : 'Entregue'}
+                        </span>
+
+                        {!closed && group.productionStatus === 'ready' && (
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => void handleConfirmDeliveryItems(group.originalItems)}
+                            className="ml-auto inline-flex items-center gap-1 rounded-md bg-emerald-700 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-800 transition-colors disabled:opacity-50"
+                          >
+                            <span>✓ Entregar na Mesa ({group.quantity}x)</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
                     {isCancelled ? (
                       <div className="mt-1.5">
                         <span className="inline-block px-2 py-0.5 text-[11px] font-medium rounded bg-gray-100 text-gray-600 border border-gray-200">
-                          Cancelado{item.cancellation_reason ? ` — ${item.cancellation_reason}` : ''}
+                          Cancelado{group.latestItem.cancellation_reason ? ` — ${group.latestItem.cancellation_reason}` : ''}
                         </span>
                       </div>
                     ) : !closed && (
-                    cancellingId === item.id ? (
-                      <form onSubmit={handleCancel} className="mt-2 space-y-2">
-                        <label htmlFor={`cancel-reason-${item.id}`} className="block text-xs font-medium">Motivo do cancelamento</label>
-                        <input
-                          id={`cancel-reason-${item.id}`}
-                          required
-                          minLength={3}
-                          maxLength={300}
-                          value={reason}
-                          disabled={disabled}
-                          onChange={(event) => setReason(event.target.value)}
-                          className="min-h-9 w-full rounded-lg border border-black/20 px-2 text-xs"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="submit"
+                      activeCancellingItem ? (
+                        <form onSubmit={handleCancel} className="mt-2 space-y-2 rounded-lg bg-red-50/70 p-2.5 border border-red-200">
+                          <label htmlFor={`cancel-reason-${activeCancellingItem.id}`} className="block text-xs font-semibold text-red-900">
+                            Motivo do cancelamento (estornando lote de {activeCancellingItem.quantity}x)
+                          </label>
+                          <input
+                            id={`cancel-reason-${activeCancellingItem.id}`}
+                            required
+                            minLength={3}
+                            maxLength={300}
+                            value={reason}
                             disabled={disabled}
-                            className="min-h-8 rounded-lg bg-[var(--brand)] px-3 text-xs text-white disabled:opacity-50"
-                          >
-                            Confirmar cancelamento
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => { setCancellingId(null); setReason(''); }}
-                            className="min-h-8 rounded-lg border border-black/15 px-3 text-xs"
-                          >
-                            Voltar
-                          </button>
+                            placeholder="Ex: Cliente desistiu antes do preparo"
+                            onChange={(event) => setReason(event.target.value)}
+                            className="min-h-9 w-full rounded-lg border border-black/20 bg-white px-2 text-xs"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="submit"
+                              disabled={disabled}
+                              className="min-h-8 rounded-lg bg-red-700 hover:bg-red-800 px-3 text-xs font-semibold text-white disabled:opacity-50"
+                            >
+                              Confirmar estorno
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => { setCancellingId(null); setReason(''); }}
+                              className="min-h-8 rounded-lg border border-black/15 bg-white px-3 text-xs"
+                            >
+                              Voltar
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="mt-2 flex flex-col gap-1.5">
+                          {group.originalItems.length === 1 ? (
+                            <button
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => { setCancellingId(group.originalItems[0].id); setReason(''); setActionError(''); }}
+                              className="text-left text-xs text-[var(--brand)] underline hover:text-red-700 disabled:opacity-50"
+                            >
+                              Cancelar lançamento
+                            </button>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <button
+                                  type="button"
+                                  disabled={disabled}
+                                  onClick={() => { setCancellingId(group.latestItem.id); setReason(''); setActionError(''); }}
+                                  className="text-xs text-[var(--brand)] underline hover:text-red-700 font-medium disabled:opacity-50"
+                                >
+                                  Cancelar último lançamento ({group.latestItem.quantity}x)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandBatch(group.key)}
+                                  className="text-xs text-stone-600 hover:text-stone-900 underline"
+                                >
+                                  {isExpanded ? 'Ocultar lotes' : `Ver todos os ${group.originalItems.length} lotes`}
+                                </button>
+                              </div>
+
+                              {isExpanded && (
+                                <div className="mt-2 space-y-1 rounded-lg bg-[#f8f5f0] p-2 border border-[#ded5c8]">
+                                  <span className="text-[11px] font-semibold text-stone-700 block">
+                                    Lançamentos individuais deste item:
+                                  </span>
+                                  {group.originalItems.map((batch, idx) => (
+                                    <div
+                                      key={batch.id}
+                                      className="flex items-center justify-between text-[11px] py-1 border-b border-[#ebdccb] last:border-0"
+                                    >
+                                      <span className="text-stone-700">
+                                        Lote #{idx + 1}: <strong>{batch.quantity}x</strong> às {timeFormat.format(new Date(batch.created_at))} ({currency.format(batch.line_total_in_cents / 100)})
+                                      </span>
+                                      <button
+                                        type="button"
+                                        disabled={disabled}
+                                        onClick={() => { setCancellingId(batch.id); setReason(''); setActionError(''); }}
+                                        className="text-[var(--brand)] underline hover:text-red-700 font-semibold"
+                                      >
+                                        Cancelar este
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </form>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => { setCancellingId(item.id); setReason(''); setActionError(''); }}
-                        className="mt-1 text-xs text-[var(--brand)] underline disabled:opacity-50"
-                      >
-                        Cancelar lançamento
-                      </button>
-                    ))}
+                      )
+                    )}
                   </li>
                 );
               })}

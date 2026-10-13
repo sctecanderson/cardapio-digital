@@ -95,6 +95,11 @@ const MediaMaintenancePage = lazy(() =>
     default: m.MediaMaintenancePage,
   })),
 );
+const KdsPage = lazy(() =>
+  import("../features/kds/KdsPage").then((m) => ({
+    default: m.KdsPage,
+  })),
+);
 
 const PlatformAccessPage = lazy(() =>
   import('../features/platform/PlatformAccessPage').then((module) => ({
@@ -377,6 +382,7 @@ export function App() {
           </Route>
 
           <Route element={<RequireStaffAccess requiredRole="admin" />}>
+            <Route path="admin/kds" element={<KdsPage />} />
             <Route path="admin" element={<AdminLayout />}>
               <Route index element={<AdminOverview />} />
               <Route path="catalogo" element={<AdminCatalogPage />} />

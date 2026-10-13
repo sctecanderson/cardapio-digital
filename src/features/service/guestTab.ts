@@ -44,6 +44,21 @@ export interface GuestTableTabSessionRpcResult {
   expires_at: string;
 }
 
+export interface GuestTableTabContextRpcResult {
+  session_id: string;
+  restaurant_id: string;
+  restaurant_table_id: string;
+  status: 'pending' | 'active' | 'revoked' | 'expired';
+  table_visit_id: string | null;
+  table_tab_id: string | null;
+  tab_status: 'open' | 'closed' | null;
+  tab_label: string | null;
+  created_at: string;
+  expires_at: string;
+  totalInCents: number;
+  items: TabConsumptionItem[];
+}
+
 export async function getGuestTabState(
   restaurantSlug: string,
   tableNumber: number,
@@ -71,8 +86,65 @@ export async function getGuestTabState(
   }
   base.userId = user.id;
 
-  // Consulta atômica no servidor através da RPC get_guest_table_tab_session
-  // Pré-requisito: migration 20261010090000_get_guest_table_tab_session.sql
+  // 1. Tenta consulta atômica completa via get_guest_table_tab_context
+  // (inclui comanda, total e itens com status KDS em um único snapshot)
+  const { data: ctxData, error: ctxError } = await supabase
+    .rpc('get_guest_table_tab_context', {
+      p_restaurant_slug: restaurantSlug,
+      p_table_number: tableNumber,
+    })
+    .maybeSingle()
+    .overrideTypes<GuestTableTabContextRpcResult, { merge: false }>();
+
+  if (!ctxError && ctxData) {
+    base.guestSessionId = ctxData.session_id;
+
+    if (ctxData.status === 'revoked') {
+      return { ...base, status: 'closed' };
+    }
+    if (ctxData.status === 'expired') {
+      return { ...base, status: 'hidden' };
+    }
+    if (ctxData.status === 'pending') {
+      return { ...base, status: 'waiting', guestStatus: 'pending' };
+    }
+    if (ctxData.status === 'active') {
+      if (!ctxData.table_tab_id) {
+        return { ...base, status: 'waiting', guestStatus: 'active' };
+      }
+
+      base.tabId = ctxData.table_tab_id;
+      const tab: GuestTabReference = {
+        id: ctxData.table_tab_id,
+        restaurant_id: ctxData.restaurant_id,
+        label: ctxData.tab_label || 'Comanda da Mesa',
+        status: ctxData.tab_status === 'closed' ? 'closed' : 'open',
+      };
+
+      if (tab.status === 'closed') {
+        return {
+          ...base,
+          status: 'closed',
+          tab,
+          items: ctxData.items || [],
+          totalInCents: ctxData.totalInCents || 0,
+        };
+      }
+
+      return {
+        ...base,
+        status: 'ready',
+        tabId: tab.id,
+        tab,
+        items: ctxData.items || [],
+        totalInCents: ctxData.totalInCents || 0,
+      };
+    }
+
+    return { ...base, status: 'hidden' };
+  }
+
+  // 2. Fallback: consulta clássica através de get_guest_table_tab_session
   const { data: rpcData, error: rpcError } = await supabase
     .rpc('get_guest_table_tab_session', {
       p_restaurant_slug: restaurantSlug,

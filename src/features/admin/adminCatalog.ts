@@ -8,6 +8,7 @@ export interface AdminProduct {
   description: string; price_in_cents: number; available: boolean; featured: boolean;
   sort_order: number; dietary_information: string | null;
   prep_time_min_minutes?: number | null; prep_time_max_minutes?: number | null;
+  preparation_station?: 'kitchen' | 'bar' | 'none';
   revision: number;
   images: AdminImage[]; cover_image_id: string | null; video: AdminVideo | null;
 }
@@ -41,7 +42,8 @@ export function parseAdminCatalog(value: unknown): AdminCatalog {
       || typeof row.price_in_cents !== 'number' || !Number.isSafeInteger(row.price_in_cents) || row.price_in_cents < 0
       || typeof row.short_description !== 'string' || typeof row.description !== 'string'
       || typeof row.available !== 'boolean' || typeof row.featured !== 'boolean'
-      || (row.dietary_information !== null && typeof row.dietary_information !== 'string')) throw new Error('Produto inválido.');
+      || (row.dietary_information !== null && typeof row.dietary_information !== 'string')
+      || (row.preparation_station !== undefined && !['kitchen', 'bar', 'none'].includes(row.preparation_station as string))) throw new Error('Produto inválido.');
     if (!Array.isArray(row.images) || (row.cover_image_id !== null && typeof row.cover_image_id !== 'string')) {
       throw new Error('Galeria inválida.');
     }
@@ -58,7 +60,10 @@ export function parseAdminCatalog(value: unknown): AdminCatalog {
         || (video.durationSeconds !== undefined && (typeof video.durationSeconds !== 'number'
           || !Number.isFinite(video.durationSeconds) || video.durationSeconds <= 0))) throw new Error('Vídeo inválido.');
     }
-    return row as unknown as AdminProduct;
+    return {
+      ...row,
+      preparation_station: (row.preparation_station as 'kitchen' | 'bar' | 'none') || 'kitchen',
+    } as unknown as AdminProduct;
   });
   if (categoryIds.size !== categories.length || new Set(products.map((product) => product.id)).size !== products.length) {
     throw new Error('O catálogo contém cadastros duplicados.');

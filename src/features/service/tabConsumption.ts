@@ -4,6 +4,7 @@ export interface ConsumptionProduct {
   id: string;
   name: string;
   price_in_cents: number;
+  preparation_station?: 'kitchen' | 'bar' | 'none';
 }
 
 export interface TabConsumptionItem {
@@ -23,6 +24,11 @@ export interface TabConsumptionItem {
   cancelled_by_member_id: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
+  production_status?: 'pending' | 'preparing' | 'ready' | 'delivered';
+  preparation_station?: 'kitchen' | 'bar' | 'none';
+  prep_started_at?: string | null;
+  prep_ready_at?: string | null;
+  prep_delivered_at?: string | null;
 }
 
 function operationError(error: { code?: string; message: string }, fallback: string) {
@@ -77,7 +83,12 @@ function isConsumptionItem(value: unknown): value is TabConsumptionItem {
     && typeof value.created_at === 'string'
     && isNullableString(value.cancelled_by_member_id)
     && isNullableString(value.cancelled_at)
-    && isNullableString(value.cancellation_reason);
+    && isNullableString(value.cancellation_reason)
+    && (value.production_status === undefined || typeof value.production_status === 'string')
+    && (value.preparation_station === undefined || typeof value.preparation_station === 'string')
+    && (value.prep_started_at === undefined || isNullableString(value.prep_started_at))
+    && (value.prep_ready_at === undefined || isNullableString(value.prep_ready_at))
+    && (value.prep_delivered_at === undefined || isNullableString(value.prep_delivered_at));
 }
 
 function parseTabConsumption(

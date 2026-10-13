@@ -317,6 +317,19 @@ function CatalogContent({
                           Categoria oculta
                         </span>
                       )}
+                      <span className={`rounded-full px-2 py-1 ${
+                        product.preparation_station === 'bar'
+                          ? 'bg-orange-50 text-orange-900 border border-orange-200'
+                          : product.preparation_station === 'none'
+                            ? 'bg-stone-100 text-stone-700 border border-stone-200'
+                            : 'bg-blue-50 text-blue-900 border border-blue-200'
+                      }`}>
+                        {product.preparation_station === 'bar'
+                          ? 'Bar'
+                          : product.preparation_station === 'none'
+                            ? 'Sem preparo'
+                            : 'Cozinha'}
+                      </span>
                     </div>
                     <button
                       type="button"

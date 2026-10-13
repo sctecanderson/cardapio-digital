@@ -357,4 +357,180 @@ assert.equal(res.length, 1);
 assert.equal(res[0].status, 'expired');
 console.log('PASS: Sessão expirada temporalmente tratada com status = expired');
 
-console.log('--- TODOS OS TESTES SQL DE PERMISSÕES E BANCO REAL PASSARAM COM 100% DE SUCESSO! ---');
+// =============================================================================
+// TESTES DO BLOCO 9.4: public.get_guest_table_tab_context
+// =============================================================================
+console.log('\n--- Bateria de Testes: public.get_guest_table_tab_context (KDS Client Context) ---');
+
+// TESTE 13: anon sem autenticação é bloqueado
+await assert.rejects(
+  async () => {
+    await runAsAnon(async () => {
+      await q('select public.get_guest_table_tab_context($1, $2)', ['brasa', 1]);
+    });
+  },
+  (err) => err.code === '42501',
+  'anon sem autenticacao deve receber erro 42501'
+);
+console.log('PASS: Role anon sem autenticacao recebe 42501 (permissao negada)');
+
+// TESTE 14: Funcionario staff (nao-anonimo) retorna NULL
+res = await runAsAuthenticated(staffUser, false, () =>
+  q('select public.get_guest_table_tab_context($1, $2) as ctx', ['brasa', 1])
+);
+assert.equal(res[0].ctx, null, 'Staff nao deve conseguir ler via contexto de guest');
+console.log('PASS: Staff autenticado recebe NULL ao chamar get_guest_table_tab_context');
+
+// TESTE 15: Sessão Ativa com Itens em Diferentes Estágios KDS
+const visitContextId = 'bbbbbbbb-2222-4000-8000-222222222222';
+const tabContextId = 'cccccccc-2222-4000-8000-222222222222';
+const sessContextId = 'dddddddd-2222-4000-8000-222222222222';
+
+await runAsSuperuser(async () => {
+  // Limpa sessoes residuais do anonUser1 na mesa 1
+  await db.exec(`delete from public.guest_sessions where user_id = '${anonUser1}';`);
+
+  // Cria visita aberta
+  await db.exec(`
+    insert into public.table_visits (id, restaurant_id, restaurant_table_id, assigned_member_id, status, opened_at)
+    values ('${visitContextId}', '${brasaId}', '${brasaTable1}', '${memberId}', 'open', now());
+
+    insert into public.guest_sessions (id, restaurant_id, restaurant_table_id, user_id, table_visit_id, confirmed_by_member_id, confirmed_at, status, created_at, expires_at)
+    values ('${sessContextId}', '${brasaId}', '${brasaTable1}', '${anonUser1}', '${visitContextId}', '${memberId}', now(), 'active', now(), now() + interval '2 hours');
+
+    insert into public.table_tabs (id, restaurant_id, restaurant_table_id, table_visit_id, label, status, created_by_member_id, created_at)
+    values ('${tabContextId}', '${brasaId}', '${brasaTable1}', '${visitContextId}', 'Mesa 01 - Contexto KDS', 'open', '${memberId}', now());
+
+    insert into public.table_tab_guests (guest_session_id, table_tab_id, table_visit_id, restaurant_id, restaurant_table_id, linked_by_member_id)
+    values ('${sessContextId}', '${tabContextId}', '${visitContextId}', '${brasaId}', '${brasaTable1}', '${memberId}');
+  `);
+
+  // Cria categoria e produtos para o restaurante brasa
+  await db.exec(`
+    insert into public.menu_categories (id, restaurant_id, catalog_key, name, slug, active, sort_order)
+    values ('11111111-cccc-4000-8000-000000000001', '${brasaId}', 'brasa-pratos', 'Pratos', 'pratos', true, 1)
+    on conflict (restaurant_id, slug) do nothing;
+
+    insert into public.menu_products (id, restaurant_id, category_id, catalog_key, name, slug, price_in_cents, available, preparation_station)
+    values
+      ('11111111-dddd-4000-8000-000000000001', '${brasaId}', '11111111-cccc-4000-8000-000000000001', 'brasa-prato-principal', 'Prato Principal', 'prato-principal', 2000, true, 'kitchen'),
+      ('11111111-dddd-4000-8000-000000000002', '${brasaId}', '11111111-cccc-4000-8000-000000000001', 'brasa-agua', 'Água sem Gás', 'agua-sem-gas', 1000, true, 'none'),
+      ('11111111-dddd-4000-8000-000000000003', '${brasaId}', '11111111-cccc-4000-8000-000000000001', 'brasa-sobremesa', 'Sobremesa', 'sobremesa', 5000, true, 'kitchen')
+    on conflict (restaurant_id, slug) do nothing;
+  `);
+
+  // Insere itens com status KDS variados
+  await db.exec(`
+    -- Item 1: kitchen pending (R$ 20.00 x 2 = R$ 40.00)
+    insert into public.table_tab_items (
+      id, restaurant_id, restaurant_table_id, table_visit_id, table_tab_id,
+      product_id, product_name, unit_price_in_cents, quantity, added_by_member_id, created_at,
+      preparation_station, production_status
+    ) values (
+      '11111111-0001-4000-8000-000000000001', '${brasaId}', '${brasaTable1}', '${visitContextId}', '${tabContextId}',
+      '11111111-dddd-4000-8000-000000000001', 'Prato Principal', 2000, 2, '${memberId}', now() - interval '10 minutes',
+      'kitchen', 'pending'
+    );
+
+    -- Item 2: kitchen preparing (R$ 20.00 x 1 = R$ 20.00)
+    insert into public.table_tab_items (
+      id, restaurant_id, restaurant_table_id, table_visit_id, table_tab_id,
+      product_id, product_name, unit_price_in_cents, quantity, added_by_member_id, created_at,
+      preparation_station, production_status, prep_started_at
+    ) values (
+      '11111111-0002-4000-8000-000000000002', '${brasaId}', '${brasaTable1}', '${visitContextId}', '${tabContextId}',
+      '11111111-dddd-4000-8000-000000000001', 'Prato Principal', 2000, 1, '${memberId}', now() - interval '8 minutes',
+      'kitchen', 'preparing', now() - interval '5 minutes'
+    );
+
+    -- Item 3: kitchen ready (R$ 20.00 x 1 = R$ 20.00)
+    insert into public.table_tab_items (
+      id, restaurant_id, restaurant_table_id, table_visit_id, table_tab_id,
+      product_id, product_name, unit_price_in_cents, quantity, added_by_member_id, created_at,
+      preparation_station, production_status, prep_started_at, prep_ready_at
+    ) values (
+      '11111111-0003-4000-8000-000000000003', '${brasaId}', '${brasaTable1}', '${visitContextId}', '${tabContextId}',
+      '11111111-dddd-4000-8000-000000000001', 'Prato Principal', 2000, 1, '${memberId}', now() - interval '7 minutes',
+      'kitchen', 'ready', now() - interval '5 minutes', now() - interval '1 minute'
+    );
+
+    -- Item 4: none delivered (R$ 10.00 x 3 = R$ 30.00)
+    insert into public.table_tab_items (
+      id, restaurant_id, restaurant_table_id, table_visit_id, table_tab_id,
+      product_id, product_name, unit_price_in_cents, quantity, added_by_member_id, created_at,
+      preparation_station, production_status, prep_delivered_at
+    ) values (
+      '11111111-0004-4000-8000-000000000004', '${brasaId}', '${brasaTable1}', '${visitContextId}', '${tabContextId}',
+      '11111111-dddd-4000-8000-000000000002', 'Água sem Gás', 1000, 3, '${memberId}', now() - interval '6 minutes',
+      'none', 'delivered', now() - interval '6 minutes'
+    );
+
+    -- Item 5: Inserido como active e cancelado logo depois (R$ 50.00) - NÃO deve somar no total
+    insert into public.table_tab_items (
+      id, restaurant_id, restaurant_table_id, table_visit_id, table_tab_id,
+      product_id, product_name, unit_price_in_cents, quantity, added_by_member_id, created_at,
+      preparation_station, production_status
+    ) values (
+      '11111111-0005-4000-8000-000000000005', '${brasaId}', '${brasaTable1}', '${visitContextId}', '${tabContextId}',
+      '11111111-dddd-4000-8000-000000000003', 'Sobremesa', 5000, 1, '${memberId}', now() - interval '5 minutes',
+      'kitchen', 'pending'
+    );
+
+    update public.table_tab_items
+    set
+      status = 'cancelled',
+      cancelled_by_member_id = '${memberId}',
+      cancelled_at = now() - interval '2 minutes',
+      cancellation_reason = 'Cliente desistiu'
+    where id = '11111111-0005-4000-8000-000000000005';
+  `);
+});
+
+// Consulta pelo cliente anônimo
+res = await runAsAuthenticated(anonUser1, true, () =>
+  q('select public.get_guest_table_tab_context($1, $2) as ctx', ['brasa', 1])
+);
+const ctx = typeof res[0].ctx === 'string' ? JSON.parse(res[0].ctx) : res[0].ctx;
+
+assert.ok(ctx !== null, 'Contexto retornado não pode ser nulo');
+assert.equal(ctx.status, 'active');
+assert.equal(ctx.table_tab_id, tabContextId);
+assert.equal(ctx.tab_label, 'Mesa 01 - Contexto KDS');
+assert.equal(ctx.tab_status, 'open');
+
+// Validação dos itens e campos KDS
+assert.equal(ctx.items.length, 5, 'Deve listar todos os 5 itens (ativos e cancelados)');
+const pendingItem = ctx.items.find((i) => i.id === '11111111-0001-4000-8000-000000000001');
+const preparingItem = ctx.items.find((i) => i.id === '11111111-0002-4000-8000-000000000002');
+const readyItem = ctx.items.find((i) => i.id === '11111111-0003-4000-8000-000000000003');
+const noneItem = ctx.items.find((i) => i.id === '11111111-0004-4000-8000-000000000004');
+const cancelledItem = ctx.items.find((i) => i.id === '11111111-0005-4000-8000-000000000005');
+
+assert.equal(pendingItem.production_status, 'pending');
+assert.equal(pendingItem.preparation_station, 'kitchen');
+
+assert.equal(preparingItem.production_status, 'preparing');
+assert.ok(preparingItem.prep_started_at !== null);
+
+assert.equal(readyItem.production_status, 'ready');
+assert.ok(readyItem.prep_ready_at !== null);
+
+assert.equal(noneItem.production_status, 'delivered');
+assert.equal(noneItem.preparation_station, 'none');
+assert.ok(noneItem.prep_delivered_at !== null);
+
+assert.equal(cancelledItem.status, 'cancelled');
+assert.equal(cancelledItem.cancellation_reason, 'Cliente desistiu');
+
+// Total em centavos deve somar apenas os ativos: 4000 + 2000 + 2000 + 3000 = 11000
+assert.equal(ctx.totalInCents, 11000, 'Total em centavos deve somar apenas itens ativos (R$ 110.00)');
+console.log('PASS: get_guest_table_tab_context projeta todos os campos de KDS e calcula totalInCents atomicamente');
+
+// TESTE 16: AnonUser2 (outro cliente) nao tem acesso ao contexto da mesa do AnonUser1
+res = await runAsAuthenticated(anonUser2, true, () =>
+  q('select public.get_guest_table_tab_context($1, $2) as ctx', ['brasa', 1])
+);
+assert.equal(res[0].ctx, null, 'Cliente sem sessao vinculada recebe null');
+console.log('PASS: Isolamento multi-tenant e sessao estrita preservados no get_guest_table_tab_context');
+
+console.log('\n--- TODOS OS TESTES SQL DE PERMISSÕES E BANCO REAL PASSARAM COM 100% DE SUCESSO! ---');
