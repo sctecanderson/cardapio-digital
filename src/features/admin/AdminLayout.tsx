@@ -19,6 +19,7 @@ export function AdminLayout() {
   const links = [
     ["", "Visão geral", "home"],
     ["catalogo", "Cardápio", "menu"],
+    ["kds", "KDS Cozinha/Bar", "kds"],
     ["comentarios", "Comentários", "chat"],
     ["mesas", "Mesas e comandas", "table"],
     ["identidade", "Identidade visual", "settings"],
@@ -113,6 +114,7 @@ export function AdminIcon({ name }: { name: string }) {
     menu: "M5 3h14v18H5ZM8 7h8M8 11h8M8 15h5",
     chat: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
     table: "M3 9h18v4H3ZM5 13l-2 8M19 13l2 8M5 9V5h14v4",
+    kds: "M12 2c1.5 3 4 5 4 8a6 6 0 1 1-12 0c0-3 2.5-5 4-8 1 2 2 3 4 0z",
     settings:
       "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2",
     media: "M3 3h18v18H3ZM3 17l6-7 5 6 3-3 4 5M16 7h1",

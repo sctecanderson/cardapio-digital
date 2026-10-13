@@ -5,6 +5,7 @@ import { useTableContext } from '../tables/useTableContext';
 import { getGuestTabState } from './guestTab';
 import { BillRequestPanel } from './BillRequestPanel';
 import type { GuestTabState } from './guestTab';
+import { groupTabConsumptionItems } from './tabGrouping';
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -137,11 +138,11 @@ function GuestTabContent({ restaurantSlug, tableNumber }: {
           </div>
           {state.items.length === 0 ? <p className="text-sm opacity-75">Ainda não há consumo registrado nesta comanda.</p>
             : <ul className="space-y-3">
-              {state.items.map((item) => {
-                const isCancelled = item.status === 'cancelled';
+              {groupTabConsumptionItems(state.items).map((item) => {
+                const isCancelled = item.isCancelled;
                 return (
                   <li
-                    key={item.id}
+                    key={item.key}
                     className={`rounded-xl p-3 transition-opacity ${
                       isCancelled ? 'opacity-60 bg-gray-50' : 'bg-[var(--page)]'
                     }`}
@@ -152,14 +153,14 @@ function GuestTabContent({ restaurantSlug, tableNumber }: {
                           isCancelled ? 'line-through text-gray-500' : ''
                         }`}
                       >
-                        {item.quantity} × {item.product_name}
+                        {item.quantity} × {item.productName}
                       </span>
                       <span
                         className={`shrink-0 ${
                           isCancelled ? 'line-through text-gray-400 font-normal' : ''
                         }`}
                       >
-                        {currency.format(item.line_total_in_cents / 100)}
+                        {currency.format(item.lineTotalInCents / 100)}
                       </span>
                     </div>
                     <p
@@ -167,12 +168,34 @@ function GuestTabContent({ restaurantSlug, tableNumber }: {
                         isCancelled ? 'line-through text-gray-400' : 'opacity-75'
                       }`}
                     >
-                      {currency.format(item.unit_price_in_cents / 100)} por unidade
+                      {currency.format(item.unitPriceInCents / 100)} por unidade
                     </p>
-                    {isCancelled && (
+                    {isCancelled ? (
                       <div className="mt-2">
                         <span className="inline-block px-2 py-0.5 text-[11px] font-medium rounded bg-gray-100 text-gray-600 border border-gray-200">
                           Cancelado · não incluído no total
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className={`inline-block px-2 py-0.5 text-[11px] font-medium rounded border ${
+                          item.productionStatus === 'pending'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : item.productionStatus === 'preparing'
+                              ? item.preparationStation === 'bar'
+                                ? 'bg-orange-50 text-orange-800 border-orange-200'
+                                : 'bg-blue-50 text-blue-800 border-blue-200'
+                              : item.productionStatus === 'ready'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold'
+                                : 'bg-stone-100 text-stone-700 border-stone-200'
+                        }`}>
+                          {item.productionStatus === 'pending'
+                            ? 'Pedido recebido (Aguardando preparo)'
+                            : item.productionStatus === 'preparing'
+                              ? item.preparationStation === 'bar' ? 'Em preparo no bar' : 'Em preparo na cozinha'
+                              : item.productionStatus === 'ready'
+                                ? 'Pronto! Garçom levando à mesa'
+                                : 'Pedido entregue'}
                         </span>
                       </div>
                     )}

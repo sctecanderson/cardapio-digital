@@ -16,6 +16,7 @@ import type {
     GuestSession,
 } from '../tables/guestSessions';
 import { ServiceActionPopup, type ServiceActionType } from './ServiceActionPopup';
+import { groupTabConsumptionItems } from './tabGrouping';
 
 const currency = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -554,15 +555,57 @@ function TabOrdersContent({
     const realItems = readyTab ? readyTab.items : [];
     const hasRealItems = realItems.length > 0;
 
-    const displayItems = realItems.map((item) => ({
-        id: item.id,
-        name: item.product_name,
-        isCancelled: item.status === 'cancelled',
-        status: item.status === 'cancelled' ? 'Cancelado' : 'Pedido entregue',
-        quantity: item.quantity,
-        unitPriceInCents: item.unit_price_in_cents,
-        imageUrl: getProductImage(item.product_name),
-    }));
+    const getCustomerItemStatus = (item: (typeof realItems)[number]) => {
+        if (item.status === 'cancelled') {
+            return {
+                label: 'Cancelado',
+                className: 'tab-order-status-cancelled',
+            };
+        }
+
+        const prod = item.production_status || 'delivered';
+        const station = item.preparation_station || 'kitchen';
+
+        switch (prod) {
+            case 'pending':
+                return {
+                    label: 'Pedido recebido (Aguardando preparo)',
+                    className: 'tab-order-status-pending',
+                };
+            case 'preparing':
+                return {
+                    label: station === 'bar' ? 'Em preparo no bar' : 'Em preparo na cozinha',
+                    className: station === 'bar' ? 'tab-order-status-preparing-bar' : 'tab-order-status-preparing-kitchen',
+                };
+            case 'ready':
+                return {
+                    label: 'Pronto! Garçom levando à mesa',
+                    className: 'tab-order-status-ready',
+                };
+            case 'delivered':
+            default:
+                return {
+                    label: 'Pedido entregue',
+                    className: 'tab-order-status-delivered',
+                };
+        }
+    };
+
+    const groupedItems = groupTabConsumptionItems(realItems);
+
+    const displayItems = groupedItems.map((group) => {
+        const statusInfo = getCustomerItemStatus(group.latestItem);
+        return {
+            id: group.key,
+            name: group.productName,
+            isCancelled: group.isCancelled,
+            status: statusInfo.label,
+            statusClass: statusInfo.className,
+            quantity: group.quantity,
+            unitPriceInCents: group.unitPriceInCents,
+            imageUrl: getProductImage(group.productName),
+        };
+    });
 
     const subtotalInCents = readyTab ? readyTab.totalInCents : 0;
     const feePercent = typeof restaurant.serviceFeePercent === 'number' ? restaurant.serviceFeePercent : 10;
@@ -849,7 +892,7 @@ function TabOrdersContent({
                                                         <span className={`tab-order-name ${isCancelled ? 'line-through text-gray-400' : ''}`}>
                                                             {item.name}
                                                         </span>
-                                                        <span className={`tab-order-status ${isCancelled ? 'tab-order-status-cancelled' : ''}`}>
+                                                        <span className={`tab-order-status ${item.statusClass}`}>
                                                             {item.status}
                                                         </span>
                                                     </div>

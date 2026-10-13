@@ -61,6 +61,7 @@ export function CatalogEditor({
       product?.prep_time_max_minutes != null
         ? String(product.prep_time_max_minutes)
         : "",
+    preparationStation: (product?.preparation_station as 'kitchen' | 'bar' | 'none') ?? 'kitchen',
   });
   const [photos, setPhotos] = useState<DraftPhoto[]>(() =>
     [...(product?.images ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
@@ -180,6 +181,7 @@ export function CatalogEditor({
               dietary_information: draft.dietaryInformation.trim(),
               prep_time_min_minutes: prepMin,
               prep_time_max_minutes: prepMax,
+              preparation_station: draft.preparationStation,
             }
           : { active: draft.active }),
       };
@@ -404,6 +406,26 @@ export function CatalogEditor({
                 </div>
                 <p className="text-xs opacity-75">
                   Opcional. Para estimativa única, informe o mesmo valor nos dois campos. Deixe em branco se não quiser exibir.
+                </p>
+                <label className="block text-sm font-medium">
+                  Estação de Preparo (KDS)
+                  <select
+                    value={draft.preparationStation}
+                    className={inputClass}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        preparationStation: event.target.value as 'kitchen' | 'bar' | 'none',
+                      })
+                    }
+                  >
+                    <option value="kitchen">Cozinha (Padrão)</option>
+                    <option value="bar">Bar (Bebidas e Drinks)</option>
+                    <option value="none">Sem preparo / Pronta entrega</option>
+                  </select>
+                </label>
+                <p className="text-xs opacity-75">
+                  Define em qual esteira do KDS o pedido será preparado. Itens sem preparo não entram nas filas de produção da cozinha ou do bar.
                 </p>
                 <label className="block text-sm font-medium">
                   Ingredientes, alergênicos e restrições
