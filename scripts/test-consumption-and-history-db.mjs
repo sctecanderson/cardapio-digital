@@ -1059,6 +1059,162 @@ const [mesa3ReqStatus] = await runAsSuperuser(async () => {
 assert.equal(mesa3ReqStatus.status, 'cancelled');
 console.log('PASS: RPC dismiss_table_service_requests encerra chamados da mesa selecionada com rastreabilidade.');
 
+// ============================================================================
+// TESTE 12: Gerenciamento de Comandas por Administrador do Restaurante (Bloco 8.2)
+// ============================================================================
+console.log('\n--- Teste 12: Permissões de Administração de Comandas por Administradores e Garçons ---');
+
+const inactiveUserId = '33333333-3333-3333-3333-333333333333';
+const outsiderUserId = '44444444-4444-4444-4444-444444444444';
+const [nomaRest] = await q(`select id from public.restaurants where slug = 'noma';`);
+
+await runAsSuperuser(async () => {
+    await q(`insert into auth.users (id, is_anonymous) values ('${inactiveUserId}', false) on conflict do nothing;`);
+    await q(`insert into auth.users (id, is_anonymous) values ('${outsiderUserId}', false) on conflict do nothing;`);
+    // Membro inativo no restaurante brasa
+    await q(`
+        insert into public.restaurant_members (restaurant_id, user_id, role, active)
+        values ('${demoRest.id}', '${inactiveUserId}', 'waiter', false)
+        on conflict do nothing;
+    `);
+    // Membro de outro restaurante (noma)
+    await q(`
+        insert into public.restaurant_members (restaurant_id, user_id, role, active)
+        values ('${nomaRest.id}', '${outsiderUserId}', 'admin', true)
+        on conflict do nothing;
+    `);
+    // Restaurar taxa de serviço de brasa para 10% para teste de fechamento com taxa
+    await q(`update public.restaurants set service_fee_percent = 10 where id = '${demoRest.id}';`);
+});
+
+// Abrir atendimento na mesa 4 com Garçom 1
+const visitMesa4 = await runAsStaff(waiterStaffId, 'waiter', async () => {
+    const res = await q(`select * from public.open_table_visit('brasa', 4);`);
+    return res[0];
+});
+const tabIdMesa4 = '55555555-5555-4555-8555-555555555555';
+const tabMesa4 = await runAsStaff(waiterStaffId, 'waiter', async () => {
+    const res = await q(`select * from public.create_table_tab('brasa', $1::uuid, 'Comanda Mesa 4', $2::uuid);`, [visitMesa4.id, tabIdMesa4]);
+    return res[0];
+});
+assert.equal(tabMesa4.status, 'open');
+
+// 12.1 Outro garçom (Garçom 2) tenta adicionar item na comanda do Garçom 1: DEVE SER BLOQUEADO (42501)
+let otherWaiterTabBlocked = false;
+try {
+    await runAsStaff(waiterStaffId2, 'waiter', async () => {
+        await q(`select * from public.add_table_tab_item('brasa', $1::uuid, $2::uuid, 1, gen_random_uuid());`, [
+            tabMesa4.id,
+            'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        ]);
+    });
+} catch (err) {
+    otherWaiterTabBlocked = err.code === '42501' && err.message.includes('Somente o responsável');
+}
+assert.ok(otherWaiterTabBlocked, 'Garçom não responsável deve ser bloqueado com 42501');
+console.log('PASS: Garçom não responsável continua estritamente impedido de operar comanda alheia (42501).');
+
+// 12.2 Usuário sem vínculo ativo tenta fechar comanda: DEVE SER BLOQUEADO (42501)
+let inactiveUserBlocked = false;
+try {
+    await runAsStaff(inactiveUserId, 'waiter', async () => {
+        await q(`select * from public.close_table_tab('brasa', $1::uuid, true);`, [tabMesa4.id]);
+    });
+} catch (err) {
+    inactiveUserBlocked = err.code === '42501' && err.message.includes('não possui acesso ativo');
+}
+assert.ok(inactiveUserBlocked, 'Usuário com vínculo inativo deve ser bloqueado com 42501');
+console.log('PASS: Usuário sem vínculo ativo bloqueado de gerenciar comanda (42501).');
+
+// 12.3 Usuário de outro restaurante tenta fechar comanda: DEVE SER BLOQUEADO (42501)
+let outsiderBlocked = false;
+try {
+    await runAsStaff(outsiderUserId, 'admin', async () => {
+        await q(`select * from public.close_table_tab('brasa', $1::uuid, true);`, [tabMesa4.id]);
+    });
+} catch (err) {
+    outsiderBlocked = err.code === '42501' && err.message.includes('não possui acesso ativo');
+}
+assert.ok(outsiderBlocked, 'Usuário de outro restaurante deve ser bloqueado com 42501');
+console.log('PASS: Usuário de outro restaurante bloqueado com isolamento multi-tenant (42501).');
+
+// 12.4 Menor ajuste necessário: Administrador tenta adicionar item diretamente na comanda de outro garçom via add_table_tab_item.
+// lock_owned_table_visit NÃO foi alargada, logo esta operação DEVE SER BLOQUEADA (42501).
+let adminAddBlocked = false;
+try {
+    await runAsStaff(adminUserId, 'admin', async () => {
+        await q(`select * from public.add_table_tab_item('brasa', $1::uuid, $2::uuid, 1, gen_random_uuid());`, [
+            tabMesa4.id,
+            'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        ]);
+    });
+} catch (err) {
+    adminAddBlocked = err.code === '42501' && err.message.includes('Somente o responsável');
+}
+assert.ok(adminAddBlocked, 'add_table_tab_item deve continuar restrito ao responsável da mesa (sem alargamento indevido)');
+console.log('PASS: lock_owned_table_visit preservada: outras operações (add_table_tab_item) NÃO receberam permissões indevidas.');
+
+// Garçom responsável (Garçom 1) adiciona item legítimo na comanda
+const itemMesa4Id = '66666666-6666-4666-8666-666666666666';
+const itemAddedByWaiter = await runAsStaff(waiterStaffId, 'waiter', async () => {
+    const res = await q(`select * from public.add_table_tab_item('brasa', $1::uuid, $2::uuid, 2, $3::uuid);`, [
+        tabMesa4.id,
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        itemMesa4Id
+    ]);
+    return res[0];
+});
+assert.equal(itemAddedByWaiter.id, itemMesa4Id);
+assert.equal(itemAddedByWaiter.quantity, 2);
+
+// 12.5 Tentativa de fechar o atendimento da mesa com comanda aberta: DEVE FALHAR (22023)
+let adminVisitCloseBlocked = false;
+try {
+    await runAsStaff(adminUserId, 'admin', async () => {
+        await q(`select * from public.close_table_visit('brasa', $1::uuid);`, [visitMesa4.id]);
+    });
+} catch (err) {
+    adminVisitCloseBlocked = err.code === '22023' && err.message.includes('Encerre todas as comandas abertas');
+}
+assert.ok(adminVisitCloseBlocked, 'Mesa com comanda aberta não pode ser encerrada mesmo por administrador');
+console.log('PASS: Fechamento de atendimento bloqueado rigidamente enquanto houver comanda aberta.');
+
+// 12.6 Administrador encerra a comanda com cálculo de taxa: DEVE TER SUCESSO!
+// Verifica também que closed_by_member_id registra o adminMember.id com precisão
+const [adminMemberRecord] = await q(`select id from public.restaurant_members where restaurant_id = '${demoRest.id}' and user_id = '${adminUserId}';`);
+const closedTabByAdmin = await runAsStaff(adminUserId, 'admin', async () => {
+    const res = await q(`select * from public.close_table_tab('brasa', $1::uuid, true);`, [tabMesa4.id]);
+    return res[0];
+});
+assert.equal(closedTabByAdmin.status, 'closed');
+assert.equal(closedTabByAdmin.service_fee_accepted, true);
+assert.equal(closedTabByAdmin.closed_by_member_id, adminMemberRecord.id, 'closed_by_member_id deve registrar o membro administrador que encerrou');
+assert.equal(closedTabByAdmin.total_in_cents, closedTabByAdmin.subtotal_in_cents + closedTabByAdmin.service_fee_in_cents);
+console.log('PASS: Administrador autorizado encerra a comanda com integridade matemática e closed_by_member_id registrado.');
+
+// 12.7 Comanda encerrada: não permite alteração posterior de consumo
+let postCloseAddBlocked = false;
+try {
+    await runAsStaff(waiterStaffId, 'waiter', async () => {
+        await q(`select * from public.add_table_tab_item('brasa', $1::uuid, $2::uuid, 1, gen_random_uuid());`, [
+            tabMesa4.id,
+            'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        ]);
+    });
+} catch (err) {
+    postCloseAddBlocked = err.code === '22023' || err.message.includes('comanda encerrada');
+}
+assert.ok(postCloseAddBlocked, 'Não deve ser possível adicionar consumo após fechamento da comanda');
+console.log('PASS: Comanda encerrada bloqueia estritamente novas inclusões de consumo.');
+
+// 12.8 Com comanda fechada, encerramento da mesa pelo administrador: DEVE TER SUCESSO!
+const finalClosedVisit = await runAsStaff(adminUserId, 'admin', async () => {
+    const res = await q(`select * from public.close_table_visit('brasa', $1::uuid);`, [visitMesa4.id]);
+    return res[0];
+});
+assert.equal(finalClosedVisit.status, 'closed');
+console.log('PASS: Atendimento finalizado com sucesso após fechamento prévio de todas as comandas.');
+
 console.log('\n======================================================');
 console.log('TODOS OS TESTES DO BLOCO 4 E GESTÃO DE CHAMADOS FORAM APROVADOS COM SUCESSO!');
 console.log('======================================================');
