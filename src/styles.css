@@ -7233,4 +7233,48 @@ footer a {
     .confetti-burst-container {
         display: none !important;
     }
+}
+
+/* ==========================================================================
+   Layout de Impressão em Lote (A4) - QR Codes de Mesas (Bloco 13)
+   ========================================================================== */
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 10mm;
+    }
+
+    body, html, .restaurant, .admin-app, .admin-workspace, #admin-content {
+        background: #ffffff !important;
+        color: #000000 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: auto !important;
+        display: block !important;
+        overflow: visible !important;
+    }
+
+    .admin-sidebar,
+    .admin-topbar,
+    .skip-link,
+    .admin-page-heading,
+    .tables-toolbar,
+    .tables-quota-banner,
+    .admin-table-grid,
+    .admin-help,
+    .print\:hidden {
+        display: none !important;
+    }
+
+    .print-qr-sheet {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    .print-qr-card {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
 }

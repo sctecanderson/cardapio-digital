@@ -41,11 +41,11 @@ export function AdminLayout() {
     }
   }
   return (
-    <div className="admin-app">
-      <a href="#admin-content" className="skip-link">
+    <div className="admin-app print:block print:p-0 print:m-0 print:bg-white print:overflow-visible">
+      <a href="#admin-content" className="skip-link print:hidden">
         Pular para o conteúdo
       </a>
-      <aside className="admin-sidebar">
+      <aside className="admin-sidebar print:hidden">
         <Link to={`/${r.slug}/admin`} className="admin-logo">
           {r.logo ? (
             <img src={r.logo.url} alt={r.name} />
@@ -87,8 +87,8 @@ export function AdminLayout() {
         </button>
         {error && <p role="alert">{error}</p>}
       </aside>
-      <div className="admin-workspace">
-        <div className="admin-topbar">
+      <div className="admin-workspace print:p-0 print:m-0 print:w-full print:block print:bg-white">
+        <div className="admin-topbar print:hidden">
           <span>Administração do restaurante</span>
           <div className="admin-topbar-actions">
             <Link
@@ -114,6 +114,7 @@ export function AdminLayout() {
         {r.billingStatus === 'grace_period' && (
           <div
             role="alert"
+            className="print:hidden"
             style={{
               padding: "12px 20px",
               background: "rgba(245, 158, 11, 0.12)",
@@ -139,6 +140,7 @@ export function AdminLayout() {
         {r.billingStatus === 'expired' && (
           <div
             role="alert"
+            className="print:hidden"
             style={{
               padding: "12px 20px",
               background: "rgba(239, 68, 68, 0.12)",
@@ -161,7 +163,7 @@ export function AdminLayout() {
             </span>
           </div>
         )}
-        <main id="admin-content">
+        <main id="admin-content" className="print:p-0 print:m-0 print:w-full print:block">
           <Outlet context={access} />
         </main>
       </div>

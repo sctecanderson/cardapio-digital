@@ -8,6 +8,12 @@ import {
   dismissTableServiceRequests,
   type TableServiceRequestsSummary,
 } from "../service/serviceRequests";
+import {
+  PrintableTableQRCodes,
+  IndividualQrModal,
+  BatchPrintPreviewModal,
+} from "./PrintableTableQRCodes";
+
 const money = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -35,11 +41,60 @@ export function TablesPage() {
   const [tableToDelete, setTableToDelete] = useState<AdminTable | null>(null);
   const [deletingTable, setDeletingTable] = useState(false);
 
+  // QR Codes e Impressão em Lote (Bloco 13)
+  const [viewingQrTable, setViewingQrTable] = useState<AdminTable | null>(null);
+  const [isBatchPreviewOpen, setIsBatchPreviewOpen] = useState(false);
+  const [singlePrintTable, setSinglePrintTable] = useState<AdminTable | null>(null);
+
   const planLabel = PLAN_LABELS[r.subscriptionPlan ?? "basic"] ?? "Básico";
   const maxTables = r.maxTables ?? 10;
   const activeTablesCount = tables.filter((t) => t.active).length;
   const isLimitReached = activeTablesCount >= maxTables;
   const quotaPercent = Math.min(100, Math.round((activeTablesCount / maxTables) * 100));
+
+  // Filtro Estrito de Cotas SaaS para Impressão de QR Codes:
+  // Exclui obrigatoriamente mesas desativadas ou bloqueadas pelo plano
+  const printableTables = tables
+    .filter((t) => {
+      const isLocked = t.isLockedByPlan ?? (!t.active && t.tableNumber > maxTables);
+      return t.active && !isLocked && t.isActive !== false;
+    })
+    .sort((a, b) => a.tableNumber - b.tableNumber);
+
+  useEffect(() => {
+    function handleAfterPrint() {
+      setSinglePrintTable(null);
+    }
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => {
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, []);
+
+  function handleOpenBatchPrint() {
+    if (printableTables.length === 0) {
+      setError("Nenhuma mesa ativa e liberada pelo plano disponível para impressão.");
+      return;
+    }
+    setSinglePrintTable(null);
+    setIsBatchPreviewOpen(true);
+  }
+
+  function handleConfirmBatchPrint() {
+    setIsBatchPreviewOpen(false);
+    setSinglePrintTable(null);
+    setTimeout(() => {
+      window.print();
+    }, 120);
+  }
+
+  function handlePrintSingleTable(table: AdminTable) {
+    setViewingQrTable(null);
+    setSinglePrintTable(table);
+    setTimeout(() => {
+      window.print();
+    }, 120);
+  }
 
   // Gerenciamento de chamados por mesa no Admin
   const [tableRequestsSummary, setTableRequestsSummary] =
@@ -189,48 +244,78 @@ export function TablesPage() {
 
   return (
     <div className="admin-stack">
-      <header className="admin-page-heading">
-        <div>
-          <p className="admin-breadcrumb">Administração / Mesas</p>
-          <h1>Mesas e comandas</h1>
-          <p>Acompanhe os atendimentos e configure as mesas.</p>
-        </div>
-        <div className="admin-actions">
-          <button
-            className="admin-button"
-            disabled={loading || !!draft}
-            onClick={() => setRevision((v) => v + 1)}
-          >
-            Atualizar
-          </button>
-          <button
-            className="admin-button primary"
-            disabled={!!draft || isLimitReached || r.billingStatus === 'expired'}
-            title={
-              r.billingStatus === 'expired'
-                ? "Assinatura suspensa por expiração do ciclo. Novos atendimentos estão bloqueados."
-                : isLimitReached
-                ? `Limite de ${maxTables} mesas ativas atingido no Plano ${planLabel}. Faça upgrade para adicionar mais mesas.`
-                : undefined
-            }
-            onClick={() =>
-              edit({
-                id: crypto.randomUUID(),
-                tableNumber: 1,
-                label: "",
-                active: true,
-                revision: 0,
-                visitId: null,
-                tabCount: 0,
-                totalInCents: 0,
-                billPending: false,
-              })
-            }
-          >
-            + Nova mesa
-          </button>
-        </div>
-      </header>
+      <div className="print:hidden" style={{ display: "contents" }}>
+        <header className="admin-page-heading print:hidden">
+          <div>
+            <p className="admin-breadcrumb">Administração / Mesas</p>
+            <h1>Mesas e comandas</h1>
+            <p>Acompanhe os atendimentos e configure as mesas.</p>
+          </div>
+          <div className="admin-actions">
+            <button
+              className="admin-button"
+              disabled={loading || !!draft}
+              onClick={() => setRevision((v) => v + 1)}
+            >
+              Atualizar
+            </button>
+            <button
+              type="button"
+              className="admin-button"
+              disabled={loading || printableTables.length === 0}
+              onClick={handleOpenBatchPrint}
+              title={
+                printableTables.length === 0
+                  ? "Nenhuma mesa ativa e liberada pelo plano disponível para impressão."
+                  : `Imprimir QR Codes de ${printableTables.length} mesas ativas em folha A4`
+              }
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="6 9 6 2 18 2 18 9" />
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                <rect x="6" y="14" width="12" height="8" />
+              </svg>
+              <span>Imprimir QR Codes</span>
+            </button>
+            <button
+              className="admin-button primary"
+              disabled={!!draft || isLimitReached || r.billingStatus === 'expired'}
+              title={
+                r.billingStatus === 'expired'
+                  ? "Assinatura suspensa por expiração do ciclo. Novos atendimentos estão bloqueados."
+                  : isLimitReached
+                  ? `Limite de ${maxTables} mesas ativas atingido no Plano ${planLabel}. Faça upgrade para adicionar mais mesas.`
+                  : undefined
+              }
+              onClick={() =>
+                edit({
+                  id: crypto.randomUUID(),
+                  tableNumber: 1,
+                  label: "",
+                  active: true,
+                  revision: 0,
+                  visitId: null,
+                  tabCount: 0,
+                  totalInCents: 0,
+                  billPending: false,
+                })
+              }
+            >
+              + Nova mesa
+            </button>
+          </div>
+        </header>
 
       {/* Banner de Vigência / Inadimplência do Estabelecimento */}
       {r.billingStatus === 'grace_period' && (
@@ -760,28 +845,64 @@ export function TablesPage() {
                   </button>
                 </div>
                 {!isLocked && (
-                  <Link
-                    className="admin-text-button"
-                    to={`/${r.slug}?mesa=${t.tableNumber}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
-                  >
-                    <span>Ver endereço da mesa</span>
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "6px", flexWrap: "wrap" }}>
+                    <Link
+                      className="admin-text-button"
+                      to={`/${r.slug}?mesa=${t.tableNumber}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
                     >
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-                    </svg>
-                  </Link>
+                      <span>Ver endereço da mesa</span>
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                      </svg>
+                    </Link>
+
+                    {t.active && (
+                      <button
+                        type="button"
+                        className="admin-text-button"
+                        onClick={() => setViewingQrTable(t)}
+                        title={`Visualizar e baixar QR Code seguro da Mesa ${String(t.tableNumber).padStart(2, "0")}`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          color: "var(--brand, #059669)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <rect x="3" y="3" width="7" height="7" />
+                          <rect x="14" y="3" width="7" height="7" />
+                          <rect x="14" y="14" width="7" height="7" />
+                          <rect x="3" y="14" width="7" height="7" />
+                        </svg>
+                        <span>Ver QR Code</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </article>
             );
@@ -903,6 +1024,34 @@ export function TablesPage() {
           </div>
         </div>
       )}
+      </div>
+
+      {/* Modal Individual de Visualização e Download do QR Code */}
+      {viewingQrTable && (
+        <IndividualQrModal
+          restaurant={r}
+          table={viewingQrTable}
+          onClose={() => setViewingQrTable(null)}
+          onPrintSingle={handlePrintSingleTable}
+        />
+      )}
+
+      {/* Modal de Pré-visualização de Impressão em Lote (A4) */}
+      {isBatchPreviewOpen && (
+        <BatchPrintPreviewModal
+          restaurant={r}
+          printableTables={printableTables}
+          totalTablesCount={tables.length}
+          onClose={() => setIsBatchPreviewOpen(false)}
+          onConfirmPrint={handleConfirmBatchPrint}
+        />
+      )}
+
+      {/* Grade de Impressão em Folha A4 (Visível exclusivamente no window.print()) */}
+      <PrintableTableQRCodes
+        restaurant={r}
+        tables={singlePrintTable ? [singlePrintTable] : printableTables}
+      />
     </div>
   );
 }
