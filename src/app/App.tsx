@@ -102,6 +102,11 @@ const KdsPage = lazy(() =>
     default: m.KdsPage,
   })),
 );
+const InventoryPage = lazy(() =>
+  import("../features/inventory/InventoryPage").then((m) => ({
+    default: m.InventoryPage,
+  })),
+);
 
 const PlatformAccessPage = lazy(() =>
   import('../features/platform/PlatformAccessPage').then((module) => ({
@@ -395,6 +400,7 @@ export function App() {
             <Route path="admin" element={<AdminLayout />}>
               <Route index element={<AdminOverview />} />
               <Route path="catalogo" element={<AdminCatalogPage />} />
+              <Route path="estoque" element={<InventoryPage />} />
               <Route path="comentarios" element={<AdminCommentsPage />} />
               <Route path="identidade" element={<IdentityPage />} />
               <Route path="mesas" element={<TablesPage />} />

@@ -9,6 +9,7 @@ import {
 import { useRestaurant } from "../restaurants/RestaurantProvider";
 import { signOutStaff, type StaffAccess } from "../auth/staffAuth";
 import { ThemeToggleButton } from "../theme/ThemeToggleButton";
+import { AdminTopbar } from "./AdminTopbar";
 
 export function AdminLayout() {
   const access = useOutletContext<StaffAccess>();
@@ -20,6 +21,7 @@ export function AdminLayout() {
     ["", "Visão geral", "home"],
     ["catalogo", "Cardápio", "menu"],
     ["kds", "KDS Cozinha/Bar", "kds"],
+    ["estoque", "Estoque & Insumos", "package"],
     ["comentarios", "Comentários", "chat"],
     ["mesas", "Mesas e comandas", "table"],
     ["identidade", "Identidade visual", "settings"],
@@ -88,29 +90,7 @@ export function AdminLayout() {
         {error && <p role="alert">{error}</p>}
       </aside>
       <div className="admin-workspace print:p-0 print:m-0 print:w-full print:block print:bg-white">
-        <div className="admin-topbar print:hidden">
-          <span>Administração do restaurante</span>
-          <div className="admin-topbar-actions">
-            <Link
-              to={`/${r.slug}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
-            >
-              <span>Ver cardápio</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            </Link>
-            <ThemeToggleButton className="admin-theme-toggle" />
-            <span className="admin-profile">
-              <AdminIcon name="user" />
-              Administrador
-            </span>
-          </div>
-        </div>
+        <AdminTopbar restaurant={r} />
         {r.billingStatus === 'grace_period' && (
           <div
             role="alert"
@@ -182,6 +162,7 @@ export function AdminIcon({ name }: { name: string }) {
     media: "M3 3h18v18H3ZM3 17l6-7 5 6 3-3 4 5M16 7h1",
     user: "M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-3a8 8 0 0 1 16 0v3Z",
     bell: "M5 17h14l-2-3V9a5 5 0 0 0-10 0v5ZM10 21h4",
+    package: "M16.5 9.4 7.55 4.24M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.27 6.96 12 12.01l8.73-5.05M12 22.08V12",
     exit: "M10 3H4v18h6M9 12h12M17 8l4 4-4 4",
     lock: "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4",
   };
