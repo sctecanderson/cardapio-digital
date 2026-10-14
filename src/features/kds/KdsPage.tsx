@@ -60,6 +60,11 @@ export function KdsPage() {
 
   // Carga inicial e subscrição Realtime
   useEffect(() => {
+    if (restaurant.subscriptionPlan === 'basic') {
+      setLoading(false);
+      return;
+    }
+
     isMountedRef.current = true;
     void loadItems(true);
 
@@ -81,7 +86,7 @@ export function KdsPage() {
       isMountedRef.current = false;
       unsubscribe();
     };
-  }, [restaurant.id, loadItems]);
+  }, [restaurant.id, restaurant.subscriptionPlan, loadItems]);
 
   // Avanço do estado de produção
   const handleAdvanceStatus = async (item: KdsItem, nextStatus: ProductionStatus) => {
@@ -141,6 +146,89 @@ export function KdsPage() {
     () => filteredItems.filter((i) => i.production_status === 'ready'),
     [filteredItems]
   );
+
+  // Se o restaurante estiver no plano Básico, renderiza o Paywall comercial
+  if (restaurant.subscriptionPlan === 'basic') {
+    return (
+      <div className="flex min-h-screen flex-col bg-[#f5f2eb] text-[#2b1d17] antialiased dark:bg-[#14110f] dark:text-[#f7f3ee]">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-black/10 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-[#1a1512]/95 md:px-6">
+          <div className="flex items-center gap-4">
+            <Link
+              to={`/${slug}/admin`}
+              className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)]/60 transition-colors hover:text-[var(--ink)] dark:text-stone-400 dark:hover:text-white"
+              title="Voltar ao Painel Administrativo"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="19" y1="12" x2="5" y2="12" />
+                <polyline points="12 19 5 12 12 5" />
+              </svg>
+              <span>Painel</span>
+            </Link>
+            <div className="h-4 w-px bg-black/10 dark:bg-white/10" aria-hidden="true" />
+            <h1 className="text-base font-black tracking-tight text-[var(--ink)] dark:text-white sm:text-lg">
+              {restaurant.name}
+            </h1>
+          </div>
+          <ThemeToggleButton />
+        </header>
+
+        <main className="flex flex-1 items-center justify-center p-6">
+          <div className="max-w-md w-full rounded-3xl border border-black/10 bg-white p-8 text-center shadow-lg dark:border-white/10 dark:bg-[#1c1815]">
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+                <rect x="9" y="8" width="6" height="5" rx="1" />
+                <path d="M10 8V6.5a2 2 0 1 1 4 0V8" />
+              </svg>
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-300 mb-3">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <span>Recurso Pro &amp; Premium</span>
+            </div>
+
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight mb-3">
+              Módulo KDS exclusivo para planos Pro e Premium
+            </h2>
+
+            <p className="text-sm text-slate-600 dark:text-stone-300 leading-relaxed mb-6">
+              O painel de produção em tempo real para cozinha e bar não está habilitado no plano Básico. Entre em contato com a administração da plataforma para realizar o upgrade e agilizar seus pedidos.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                to={`/${slug}/admin`}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-slate-800 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white cursor-pointer shadow-sm"
+              >
+                Voltar ao Início
+              </Link>
+              <Link
+                to={`/${slug}/admin/mesas`}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-stone-700 px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-stone-300 transition-all hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+              >
+                Ver Mesas e Comandas
+              </Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f5f2eb] text-[#2b1d17] antialiased dark:bg-[#14110f] dark:text-[#f7f3ee]">
@@ -204,7 +292,7 @@ export function KdsPage() {
                 : 'text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white'
             }`}
           >
-            <span>🍳 Cozinha</span>
+            <span>Cozinha</span>
             <span className="rounded-full bg-orange-100 px-1.5 py-0.2 text-[10px] font-black text-orange-800 dark:bg-orange-950 dark:text-orange-300">
               {stationCounts.kitchen}
             </span>
@@ -219,7 +307,7 @@ export function KdsPage() {
                 : 'text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white'
             }`}
           >
-            <span>🍸 Bar</span>
+            <span>Bar</span>
             <span className="rounded-full bg-blue-100 px-1.5 py-0.2 text-[10px] font-black text-blue-800 dark:bg-blue-950 dark:text-blue-300">
               {stationCounts.bar}
             </span>

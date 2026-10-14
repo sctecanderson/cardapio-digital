@@ -198,11 +198,11 @@ const [{ id: nomaTable1Id }] = await q(`
 // Mesas para Noma e Restaurante B (mesas 1 a 20)
 await db.exec(`
   insert into public.restaurant_tables (restaurant_id, table_number)
-  select '${nomaId}', s from generate_series(1, 20) s
+  select '${nomaId}', s from generate_series(1, 10) s
   on conflict (restaurant_id, table_number) do nothing;
 
   insert into public.restaurant_tables (restaurant_id, table_number)
-  select '${restBId}', s from generate_series(1, 20) s
+  select '${restBId}', s from generate_series(1, 10) s
   on conflict (restaurant_id, table_number) do nothing;
 `);
 

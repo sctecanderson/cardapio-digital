@@ -21,6 +21,9 @@ export interface RestaurantIdentity extends Restaurant {
   serviceFeePercent: number;
   timezone: string;
   googleReviewUrl?: string | null;
+  subscriptionPlan?: string;
+  maxTables?: number;
+  subscriptionExpiresAt?: string | null;
 }
 export interface IdentityMedia {
   url: string;
@@ -60,6 +63,24 @@ export function parseRestaurant(value: unknown): RestaurantIdentity {
     typeof v.timezone === "string" && v.timezone.trim().length > 0
       ? v.timezone.trim()
       : "America/Sao_Paulo";
+  const subscriptionPlan =
+    typeof v.subscriptionPlan === "string"
+      ? v.subscriptionPlan
+      : typeof v.subscription_plan === "string"
+      ? v.subscription_plan
+      : "basic";
+  const maxTables =
+    typeof v.maxTables === "number" && Number.isFinite(v.maxTables)
+      ? v.maxTables
+      : typeof v.max_tables === "number" && Number.isFinite(v.max_tables)
+      ? v.max_tables
+      : 10;
+  const subscriptionExpiresAt =
+    typeof v.subscriptionExpiresAt === "string"
+      ? v.subscriptionExpiresAt
+      : typeof v.subscription_expires_at === "string"
+      ? v.subscription_expires_at
+      : null;
   for (const key of ["logo", "cover"]) {
     const m = v[key] as IdentityMedia | null;
     if (
@@ -71,7 +92,14 @@ export function parseRestaurant(value: unknown): RestaurantIdentity {
     )
       throw new Error("Imagem da identidade inválida.");
   }
-  return value as RestaurantIdentity;
+  return {
+    ...(value as RestaurantIdentity),
+    serviceFeePercent,
+    timezone,
+    subscriptionPlan,
+    maxTables,
+    subscriptionExpiresAt,
+  };
 }
 interface ContextValue {
   restaurant: RestaurantIdentity;

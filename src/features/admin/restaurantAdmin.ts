@@ -88,6 +88,8 @@ export interface AdminTable {
   tableNumber: number;
   label: string;
   active: boolean;
+  isActive?: boolean;
+  isLockedByPlan?: boolean;
   revision: number;
   visitId: string | null;
   tabCount: number;
@@ -137,10 +139,25 @@ export async function saveTable(slug: string, t: AdminTable) {
   });
   if (error)
     throw new Error(
-      ["22023", "42501", "40001"].includes(error.code)
+      ["22023", "42501", "40001", "P0001"].includes(error.code)
         ? error.message
         : "Não foi possível salvar a mesa.",
     );
   if (data !== t.id)
     throw new Error("A mesa salva não foi confirmada. Atualize a lista.");
+}
+
+export async function deleteTable(slug: string, tableNumber: number) {
+  const { data, error } = await supabase.rpc("delete_restaurant_table", {
+    p_slug: slug,
+    p_table_number: tableNumber,
+  });
+  if (error) {
+    throw new Error(
+      ["22023", "42501", "40001", "P0001"].includes(error.code)
+        ? error.message
+        : "Não foi possível excluir a mesa.",
+    );
+  }
+  return data;
 }

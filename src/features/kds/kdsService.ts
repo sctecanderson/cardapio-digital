@@ -44,13 +44,19 @@ interface RawTabItem {
 export async function fetchActiveKdsItems(restaurantSlug: string): Promise<KdsItem[]> {
   const { data: restaurant, error: restError } = await supabase
     .from('restaurants')
-    .select('id')
+    .select('id, subscription_plan')
     .eq('slug', restaurantSlug)
     .eq('active', true)
     .maybeSingle();
 
   if (restError || !restaurant) {
     throw new Error(restError?.message || 'Restaurante não encontrado.');
+  }
+
+  if (restaurant.subscription_plan === 'basic') {
+    throw new Error(
+      'O módulo KDS é exclusivo para planos Pro e Premium. Faça upgrade para acessar a esteira de produção.',
+    );
   }
 
   const restaurantId = restaurant.id;

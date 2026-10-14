@@ -121,6 +121,7 @@ export function AdminIcon({ name }: { name: string }) {
     user: "M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-3a8 8 0 0 1 16 0v3Z",
     bell: "M5 17h14l-2-3V9a5 5 0 0 0-10 0v5ZM10 21h4",
     exit: "M10 3H4v18h6M9 12h12M17 8l4 4-4 4",
+    lock: "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4",
   };
   return (
     <svg
