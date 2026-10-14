@@ -205,9 +205,11 @@ export function TablesPage() {
           </button>
           <button
             className="admin-button primary"
-            disabled={!!draft || isLimitReached}
+            disabled={!!draft || isLimitReached || r.billingStatus === 'expired'}
             title={
-              isLimitReached
+              r.billingStatus === 'expired'
+                ? "Assinatura suspensa por expiração do ciclo. Novos atendimentos estão bloqueados."
+                : isLimitReached
                 ? `Limite de ${maxTables} mesas ativas atingido no Plano ${planLabel}. Faça upgrade para adicionar mais mesas.`
                 : undefined
             }
@@ -229,6 +231,61 @@ export function TablesPage() {
           </button>
         </div>
       </header>
+
+      {/* Banner de Vigência / Inadimplência do Estabelecimento */}
+      {r.billingStatus === 'grace_period' && (
+        <div
+          role="alert"
+          style={{
+            padding: "14px 20px",
+            borderRadius: "14px",
+            background: "rgba(245, 158, 11, 0.12)",
+            border: "1px solid rgba(245, 158, 11, 0.35)",
+            color: "#b45309",
+            fontSize: "13px",
+            fontWeight: 500,
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <div>
+            <strong>Atenção:</strong> A assinatura deste estabelecimento expirou. Regularize o pagamento para evitar o bloqueio automático dos pedidos.
+          </div>
+        </div>
+      )}
+
+      {r.billingStatus === 'expired' && (
+        <div
+          role="alert"
+          style={{
+            padding: "14px 20px",
+            borderRadius: "14px",
+            background: "rgba(239, 68, 68, 0.12)",
+            border: "1px solid rgba(239, 68, 68, 0.35)",
+            color: "#b91c1c",
+            fontSize: "13px",
+            fontWeight: 500,
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="15" y1="9" x2="9" y2="15" />
+            <line x1="9" y1="9" x2="15" y2="15" />
+          </svg>
+          <div>
+            <strong>Atenção:</strong> A assinatura deste estabelecimento está suspensa por expiração do ciclo. Novos atendimentos estão bloqueados.
+          </div>
+        </div>
+      )}
 
       {/* Banner Informativo de Cota de Mesas do Plano */}
       <div
@@ -677,12 +734,22 @@ export function TablesPage() {
                 )}
                 <div className="admin-actions">
                   {!isLocked && t.active && (
-                    <Link
-                      className="admin-button primary"
-                      to={`/${r.slug}/equipe`}
-                    >
-                      {t.visitId ? "Ver atendimento" : "Abrir atendimento"}
-                    </Link>
+                    r.billingStatus === 'expired' && !t.visitId ? (
+                      <span
+                        className="admin-button"
+                        title="Assinatura suspensa por expiração do ciclo. Não é possível iniciar novos atendimentos."
+                        style={{ opacity: 0.6, cursor: "not-allowed", display: "inline-flex", alignItems: "center" }}
+                      >
+                        Atendimento bloqueado
+                      </span>
+                    ) : (
+                      <Link
+                        className="admin-button primary"
+                        to={`/${r.slug}/equipe`}
+                      >
+                        {t.visitId ? "Ver atendimento" : "Abrir atendimento"}
+                      </Link>
+                    )
                   )}
                   <button
                     className="admin-button"

@@ -91,8 +91,18 @@ export function AdminLayout() {
         <div className="admin-topbar">
           <span>Administração do restaurante</span>
           <div className="admin-topbar-actions">
-            <Link to={`/${r.slug}`} target="_blank" rel="noopener noreferrer">
-              Ver cardápio ↗
+            <Link
+              to={`/${r.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+            >
+              <span>Ver cardápio</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
             </Link>
             <ThemeToggleButton className="admin-theme-toggle" />
             <span className="admin-profile">
@@ -101,6 +111,56 @@ export function AdminLayout() {
             </span>
           </div>
         </div>
+        {r.billingStatus === 'grace_period' && (
+          <div
+            role="alert"
+            style={{
+              padding: "12px 20px",
+              background: "rgba(245, 158, 11, 0.12)",
+              borderBottom: "1px solid rgba(245, 158, 11, 0.35)",
+              color: "#b45309",
+              fontSize: "13px",
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>
+              <strong>Atenção:</strong> A assinatura deste estabelecimento expirou. Regularize o pagamento para evitar o bloqueio automático dos pedidos.
+            </span>
+          </div>
+        )}
+        {r.billingStatus === 'expired' && (
+          <div
+            role="alert"
+            style={{
+              padding: "12px 20px",
+              background: "rgba(239, 68, 68, 0.12)",
+              borderBottom: "1px solid rgba(239, 68, 68, 0.35)",
+              color: "#b91c1c",
+              fontSize: "13px",
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+            <span>
+              <strong>Atenção:</strong> A assinatura deste estabelecimento está suspensa por expiração do ciclo. Novos atendimentos estão bloqueados.
+            </span>
+          </div>
+        )}
         <main id="admin-content">
           <Outlet context={access} />
         </main>

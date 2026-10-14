@@ -24,6 +24,7 @@ export interface RestaurantIdentity extends Restaurant {
   subscriptionPlan?: string;
   maxTables?: number;
   subscriptionExpiresAt?: string | null;
+  billingStatus?: 'active' | 'grace_period' | 'expired';
 }
 export interface IdentityMedia {
   url: string;
@@ -81,6 +82,16 @@ export function parseRestaurant(value: unknown): RestaurantIdentity {
       : typeof v.subscription_expires_at === "string"
       ? v.subscription_expires_at
       : null;
+  const rawBillingStatus =
+    typeof v.billingStatus === "string"
+      ? v.billingStatus
+      : typeof v.billing_status === "string"
+      ? v.billing_status
+      : undefined;
+  const billingStatus: 'active' | 'grace_period' | 'expired' =
+    rawBillingStatus === 'grace_period' || rawBillingStatus === 'expired'
+      ? rawBillingStatus
+      : 'active';
   for (const key of ["logo", "cover"]) {
     const m = v[key] as IdentityMedia | null;
     if (
@@ -99,6 +110,7 @@ export function parseRestaurant(value: unknown): RestaurantIdentity {
     subscriptionPlan,
     maxTables,
     subscriptionExpiresAt,
+    billingStatus,
   };
 }
 interface ContextValue {

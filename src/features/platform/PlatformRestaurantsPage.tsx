@@ -12,6 +12,9 @@ import {
   updatePlatformBranding,
   updatePlatformPlanCatalog,
   updateRestaurantSaasPlan,
+  fetchPlatformAuditLogs,
+  type PlatformAuditLog,
+  type PlatformBillingStatus,
   type PlatformBrandingSettings,
   type PlatformRestaurant,
   type SubscriptionPlan,
@@ -140,6 +143,113 @@ function compressImageToDataUrl(file: File, maxDimension = 256): Promise<string>
   });
 }
 
+function renderAuditActionBadge(action: string) {
+  switch (action) {
+    case 'plan_changed':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+          </svg>
+          Alteração de Plano
+        </span>
+      );
+    case 'cycle_renewed':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Renovação de Ciclo
+        </span>
+      );
+    case 'table_deleted':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Exclusão de Mesa
+        </span>
+      );
+    case 'restaurant_suspended':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Suspensão
+        </span>
+      );
+    case 'restaurant_restored':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Restauração
+        </span>
+      );
+    case 'catalog_updated':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+          </svg>
+          Catálogo Geral
+        </span>
+      );
+    case 'branding_updated':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-50 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-300 dark:border-cyan-800">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Identidade Visual
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-700">
+          {action}
+        </span>
+      );
+  }
+}
+
+function formatAuditDetails(details: Record<string, unknown> | null) {
+  if (!details || Object.keys(details).length === 0) return '—';
+
+  const entries: string[] = [];
+  if (details.old_plan && details.new_plan) {
+    entries.push(`Plano: ${String(details.old_plan).toUpperCase()} → ${String(details.new_plan).toUpperCase()}`);
+  }
+  if (details.monthly_price_cents !== undefined) {
+    entries.push(`Preço: ${(Number(details.monthly_price_cents) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
+  }
+  if (details.max_tables !== undefined) {
+    entries.push(`Cota: ${details.max_tables} mesas`);
+  }
+  if (details.action_type === 'renew_cycle') {
+    entries.push('Ciclo estendido (+30 dias)');
+  }
+  if (details.table_number !== undefined) {
+    entries.push(`Mesa: #${details.table_number}`);
+  }
+  if (details.reason) {
+    entries.push(`Motivo: "${details.reason}"`);
+  }
+  if (details.sync_restaurants) {
+    entries.push('Sincronização em massa aplicada');
+  }
+
+  if (entries.length > 0) {
+    return entries.join(' · ');
+  }
+
+  return JSON.stringify(details);
+}
+
 export function PlatformRestaurantsPage() {
   return (
     <ThemeProvider>
@@ -197,6 +307,11 @@ function PlatformRestaurantsContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [restaurantFilter, setRestaurantFilter] = useState<'current' | 'archived'>('current');
   const [planFilter, setPlanFilter] = useState<'all' | 'basic' | 'pro' | 'premium'>('all');
+  const [portfolioFilter, setPortfolioFilter] = useState<'all' | 'active' | 'expiring' | 'quota_warning' | 'expired_grace'>('all');
+  const [alertsPopoverOpen, setAlertsPopoverOpen] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<PlatformAuditLog[]>([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+  const [auditLogsError, setAuditLogsError] = useState('');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Formulário de cadastro
@@ -324,6 +439,24 @@ function PlatformRestaurantsContent() {
     };
   }, [refresh]);
 
+  const loadAuditLogs = async () => {
+    setLoadingAuditLogs(true);
+    setAuditLogsError('');
+    try {
+      const logs = await fetchPlatformAuditLogs(50);
+      setAuditLogs(logs);
+    } catch (err) {
+      setAuditLogsError(err instanceof Error ? err.message : 'Erro ao carregar registros de auditoria.');
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'security') {
+      void loadAuditLogs();
+    }
+  }, [activeTab, refresh]);
 
   // Contagens para os KPIs e Badges
   const activeRestaurants = useMemo(
@@ -421,7 +554,34 @@ function PlatformRestaurantsContent() {
       .sort((a, b) => b.usage - a.usage);
   }, [activeRestaurants]);
 
-  // Filtro de restaurantes (por busca, por status ativos/arquivados e por plano)
+  // Contagens para os Filtros da Carteira (Portfolio Filter Pills)
+  const portfolioCounts = useMemo(() => {
+    const base = restaurants.filter((r) =>
+      restaurantFilter === 'archived' ? r.archivedAt !== null : r.archivedAt === null
+    );
+    return {
+      all: base.length,
+      active: base.filter((r) => r.active && (r.billingStatus === 'active' || r.daysRemaining > 0)).length,
+      expiring: base.filter((r) => r.daysRemaining > 0 && r.daysRemaining <= 7).length,
+      quota_warning: base.filter((r) => r.maxTables > 0 && (r.activeTablesCount / r.maxTables) >= 0.8).length,
+      expired_grace: base.filter((r) => r.billingStatus === 'grace_period' || r.billingStatus === 'expired' || r.daysRemaining <= 0).length,
+    };
+  }, [restaurants, restaurantFilter]);
+
+  // Alertas e Notificações Inteligentes da Topbar
+  const financialAlerts = useMemo(() => {
+    return activeRestaurants.filter((r) => r.daysRemaining <= 5 || r.billingStatus !== 'active');
+  }, [activeRestaurants]);
+
+  const quotaAlerts = useMemo(() => {
+    return activeRestaurants.filter((r) => r.maxTables > 0 && (r.activeTablesCount / r.maxTables) >= 0.8);
+  }, [activeRestaurants]);
+
+  const totalAlertsCount = useMemo(() => {
+    return financialAlerts.length + quotaAlerts.length;
+  }, [financialAlerts, quotaAlerts]);
+
+  // Filtro de restaurantes (por busca com emails, por status ativos/arquivados, por plano e por carteira)
   const filteredRestaurants = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return restaurants.filter((r) => {
@@ -437,14 +597,26 @@ function PlatformRestaurantsContent() {
 
       if (!matchesPlan) return false;
 
+      const matchesPortfolio = (() => {
+        if (portfolioFilter === 'all') return true;
+        if (portfolioFilter === 'active') return r.active && (r.billingStatus === 'active' || r.daysRemaining > 0);
+        if (portfolioFilter === 'expiring') return r.daysRemaining > 0 && r.daysRemaining <= 7;
+        if (portfolioFilter === 'quota_warning') return r.maxTables > 0 && (r.activeTablesCount / r.maxTables) >= 0.8;
+        if (portfolioFilter === 'expired_grace') return r.billingStatus === 'grace_period' || r.billingStatus === 'expired' || r.daysRemaining <= 0;
+        return true;
+      })();
+
+      if (!matchesPortfolio) return false;
+
       if (!q) return true;
 
-      return (
-        r.name.toLowerCase().includes(q) ||
-        r.slug.toLowerCase().includes(q)
-      );
+      const matchesName = r.name.toLowerCase().includes(q);
+      const matchesSlug = r.slug.toLowerCase().includes(q);
+      const matchesEmail = (r.adminEmails || []).some((email) => email.toLowerCase().includes(q));
+
+      return matchesName || matchesSlug || matchesEmail;
     });
-  }, [restaurants, restaurantFilter, planFilter, searchQuery]);
+  }, [restaurants, restaurantFilter, planFilter, portfolioFilter, searchQuery]);
 
   // Filtro de exclusões
   const filteredDeletions = useMemo(() => {
@@ -1282,18 +1454,159 @@ function PlatformRestaurantsContent() {
               </span>
             </div>
 
-            {/* Ícone de sino (Notificações) */}
-            <button
-              type="button"
-              className="h-9 w-9 rounded-xl border border-slate-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-slate-600 dark:text-stone-300 hover:bg-slate-50 dark:hover:bg-stone-700 flex items-center justify-center transition-colors cursor-pointer"
-              aria-label="Notificações operacionais"
-              title="Notificações operacionais"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-            </button>
+            {/* Ícone de sino com Popover Inteligente (Central de Alertas) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setAlertsPopoverOpen((prev) => !prev)}
+                className="h-9 w-9 rounded-xl border border-slate-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-slate-600 dark:text-stone-300 hover:bg-slate-50 dark:hover:bg-stone-700 flex items-center justify-center transition-colors cursor-pointer relative"
+                aria-label="Central de notificações e alertas"
+                title="Central de notificações e alertas"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                {totalAlertsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-600 text-white text-[9px] font-black flex items-center justify-center shadow-xs">
+                    {totalAlertsCount}
+                  </span>
+                )}
+              </button>
+
+              {alertsPopoverOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setAlertsPopoverOpen(false)}
+                    aria-hidden="true"
+                  />
+                  <div className="absolute right-0 top-full mt-2 z-50 w-80 sm:w-96 rounded-2xl border border-slate-200 dark:border-stone-700 bg-white dark:bg-stone-900 shadow-2xl p-4 text-xs space-y-4 max-h-[85vh] overflow-y-auto">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-stone-800">
+                      <div className="flex items-center gap-2">
+                        <strong className="text-sm font-black text-slate-900 dark:text-white">Central de Alertas</strong>
+                        {totalAlertsCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300">
+                            {totalAlertsCount} pendência{totalAlertsCount !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAlertsPopoverOpen(false)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-stone-300 p-1 cursor-pointer"
+                        aria-label="Fechar painel de alertas"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {totalAlertsCount === 0 ? (
+                      <div className="py-6 text-center text-slate-400 dark:text-stone-500 space-y-1">
+                        <p className="font-semibold text-slate-700 dark:text-stone-300">Tudo em dia!</p>
+                        <p className="text-[11px]">Nenhum alerta financeiro ou de capacidade pendente no momento.</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Seção 1: Alertas Financeiros */}
+                        {financialAlerts.length > 0 && (
+                          <div className="space-y-2">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                              <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                              <span>Alertas Financeiros & Vencimento ({financialAlerts.length})</span>
+                            </span>
+                            <div className="space-y-2">
+                              {financialAlerts.map((rest) => {
+                                const isExpired = rest.billingStatus === 'expired' || rest.daysRemaining <= -3;
+                                const isGrace = rest.billingStatus === 'grace_period' || (rest.daysRemaining <= 0 && rest.daysRemaining > -3);
+                                return (
+                                  <div
+                                    key={rest.id}
+                                    className="p-2.5 rounded-xl border border-rose-100 dark:border-rose-950/60 bg-rose-50/40 dark:bg-rose-950/20 flex items-center justify-between gap-2"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <strong className="text-slate-900 dark:text-white font-bold truncate block">
+                                          {rest.name}
+                                        </strong>
+                                        <PlanBadge plan={rest.subscriptionPlan} />
+                                      </div>
+                                      <p className="text-[10px] text-rose-700 dark:text-rose-300 font-semibold mt-0.5">
+                                        {isExpired
+                                          ? 'Assinatura suspensa por expiração'
+                                          : isGrace
+                                          ? `Em tolerância (${Math.max(0, 3 + rest.daysRemaining)}d restantes)`
+                                          : `Vence em ${rest.daysRemaining} dia${rest.daysRemaining !== 1 ? 's' : ''}`}
+                                      </p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setAlertsPopoverOpen(false);
+                                        void handleQuickRenew(rest);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] shrink-0 transition-colors shadow-2xs cursor-pointer"
+                                    >
+                                      Renovar (+30d)
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Seção 2: Oportunidades de Upgrade */}
+                        {quotaAlerts.length > 0 && (
+                          <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-stone-800">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                              <span>Oportunidades de Upgrade ({quotaAlerts.length})</span>
+                            </span>
+                            <div className="space-y-2">
+                              {quotaAlerts.map((rest) => {
+                                const usagePct = Math.round((rest.activeTablesCount / rest.maxTables) * 100);
+                                return (
+                                  <div
+                                    key={rest.id}
+                                    className="p-2.5 rounded-xl border border-amber-100 dark:border-amber-950/60 bg-amber-50/40 dark:bg-amber-950/20 flex items-center justify-between gap-2"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <strong className="text-slate-900 dark:text-white font-bold truncate block">
+                                          {rest.name}
+                                        </strong>
+                                        <PlanBadge plan={rest.subscriptionPlan} />
+                                      </div>
+                                      <p className="text-[10px] text-amber-800 dark:text-amber-300 font-semibold mt-0.5">
+                                        {rest.activeTablesCount}/{rest.maxTables} mesas ({usagePct}% da cota utilizada)
+                                      </p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setAlertsPopoverOpen(false);
+                                        openPlanModal(rest);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 font-bold text-[10px] shrink-0 transition-colors cursor-pointer"
+                                    >
+                                      Alterar Plano
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
 
             <ThemeToggleButton className="h-9 w-9 !rounded-xl !border !border-slate-200 dark:!border-stone-700 !bg-white dark:!bg-stone-800 !text-slate-600 dark:!text-stone-300 hover:!bg-slate-50 dark:hover:!bg-stone-700 flex items-center justify-center cursor-pointer transition-colors" />
           </div>
@@ -1995,6 +2308,92 @@ function PlatformRestaurantsContent() {
                   </div>
                 </div>
 
+                {/* 3.2.1 — Filtros de Portfólio / Carteira SaaS (Pills Segmentadas) */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-bold scrollbar-none">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-stone-500 mr-1 shrink-0">
+                    Carteira:
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setPortfolioFilter('all')}
+                    className={`px-3 py-1.5 rounded-full border transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      portfolioFilter === 'all'
+                        ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 shadow-2xs'
+                        : 'border-slate-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-slate-600 dark:text-stone-300 hover:border-slate-300'
+                    }`}
+                  >
+                    <span>Todos</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/20">
+                      {portfolioCounts.all}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPortfolioFilter('active')}
+                    className={`px-3 py-1.5 rounded-full border transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      portfolioFilter === 'active'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                        : 'border-slate-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-slate-600 dark:text-stone-300 hover:border-emerald-300'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                    <span>Ativos</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/20">
+                      {portfolioCounts.active}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPortfolioFilter('expiring')}
+                    className={`px-3 py-1.5 rounded-full border transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      portfolioFilter === 'expiring'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                        : 'border-slate-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-slate-600 dark:text-stone-300 hover:border-amber-300'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                    <span>Próximos do Vencimento (≤ 7 dias)</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/20">
+                      {portfolioCounts.expiring}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPortfolioFilter('quota_warning')}
+                    className={`px-3 py-1.5 rounded-full border transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      portfolioFilter === 'quota_warning'
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                        : 'border-slate-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-slate-600 dark:text-stone-300 hover:border-purple-300'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 inline-block" />
+                    <span>Cota Esgotada (≥ 80% das mesas)</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/20">
+                      {portfolioCounts.quota_warning}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPortfolioFilter('expired_grace')}
+                    className={`px-3 py-1.5 rounded-full border transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      portfolioFilter === 'expired_grace'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                        : 'border-slate-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-slate-600 dark:text-stone-300 hover:border-rose-300'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" />
+                    <span>Vencidos / Tolerância</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/20">
+                      {portfolioCounts.expired_grace}
+                    </span>
+                  </button>
+                </div>
+
                 {/* Listagem em Grid de 2 Colunas */}
                 {loading ? (
                   <p role="status" className="py-8 text-xs font-semibold text-slate-500">
@@ -2025,16 +2424,21 @@ function PlatformRestaurantsContent() {
                           <div>
                             {/* Topo do card: Nome + Badges + Botão Excluir */}
                             <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight uppercase">
+                              <div className="min-w-0">
+                                <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight uppercase truncate">
                                   {restaurant.name}
                                 </h3>
                                 <span className="text-xs font-mono text-slate-500 dark:text-stone-400 block mt-0.5">
                                   /{restaurant.slug}
                                 </span>
+                                {restaurant.adminEmails && restaurant.adminEmails.length > 0 && (
+                                  <span className="text-[10px] text-slate-400 block truncate max-w-[200px] mt-0.5 font-mono" title={restaurant.adminEmails.join(', ')}>
+                                    Admin: {restaurant.adminEmails.join(', ')}
+                                  </span>
+                                )}
                               </div>
 
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
                                 {/* Badge de Status */}
                                 {restaurant.active ? (
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
@@ -2043,6 +2447,18 @@ function PlatformRestaurantsContent() {
                                 ) : (
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
                                     Suspenso
+                                  </span>
+                                )}
+
+                                {/* Badge de Vigência / Inadimplência */}
+                                {restaurant.billingStatus === 'expired' && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800">
+                                    Inadimplente
+                                  </span>
+                                )}
+                                {restaurant.billingStatus === 'grace_period' && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
+                                    Tolerância (3d)
                                   </span>
                                 )}
 
@@ -2693,10 +3109,123 @@ function PlatformRestaurantsContent() {
                       className="p-3 rounded-xl border border-slate-200 dark:border-stone-700 hover:border-slate-400 text-xs font-bold text-slate-800 dark:text-stone-200 hover:bg-slate-50 dark:hover:bg-stone-800 transition-all flex items-center justify-between"
                     >
                       <span className="truncate">{rest.name}</span>
-                      <span className="text-slate-400">→</span>
+                      <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
                     </Link>
                   ))}
                 </div>
+              </section>
+
+              {/* Seção: Registro de Auditoria da Plataforma */}
+              <section className="rounded-2xl border border-slate-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-6 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                        Registro de Auditoria da Plataforma
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 dark:bg-stone-800 dark:text-stone-300 border border-slate-200 dark:border-stone-700">
+                        {auditLogs.length} eventos
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-stone-400 mt-0.5">
+                      Trilha de auditoria imutável de ações administrativas, alterações de planos e governança.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void loadAuditLogs()}
+                    disabled={loadingAuditLogs}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-stone-700 hover:bg-slate-50 dark:hover:bg-stone-800 text-xs font-bold text-slate-700 dark:text-stone-300 transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    <svg className={`w-3.5 h-3.5 ${loadingAuditLogs ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    {loadingAuditLogs ? 'Carregando...' : 'Atualizar'}
+                  </button>
+                </div>
+
+                {auditLogsError && (
+                  <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-medium mb-4 flex items-center justify-between">
+                    <span>{auditLogsError}</span>
+                    <button
+                      type="button"
+                      onClick={() => void loadAuditLogs()}
+                      className="underline font-bold text-rose-800 dark:text-rose-200 hover:opacity-80"
+                    >
+                      Tentar novamente
+                    </button>
+                  </div>
+                )}
+
+                {loadingAuditLogs && auditLogs.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-slate-500 dark:text-stone-400">
+                    <svg className="w-5 h-5 mx-auto mb-2 text-slate-400 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Carregando registros de auditoria...
+                  </div>
+                ) : auditLogs.length === 0 ? (
+                  <div className="p-8 text-center rounded-xl border border-dashed border-slate-200 dark:border-stone-800">
+                    <svg className="w-8 h-8 mx-auto mb-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-stone-300">Nenhum evento registrado</p>
+                    <p className="text-[11px] text-slate-400 dark:text-stone-500 mt-0.5">Eventos administrativos aparecerão aqui automaticamente.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-stone-800">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 dark:bg-stone-800/60 text-slate-500 dark:text-stone-400 font-bold border-b border-slate-200 dark:border-stone-800">
+                        <tr>
+                          <th className="py-3 px-4">Data / Hora</th>
+                          <th className="py-3 px-4">Ação</th>
+                          <th className="py-3 px-4">Estabelecimento</th>
+                          <th className="py-3 px-4">Responsável</th>
+                          <th className="py-3 px-4">Detalhes</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-stone-800 text-slate-700 dark:text-stone-300">
+                        {auditLogs.map((log) => (
+                          <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-stone-800/40 transition-colors">
+                            <td className="py-3 px-4 whitespace-nowrap text-[11px] font-mono text-slate-500 dark:text-stone-400">
+                              {new Date(log.createdAt).toLocaleString('pt-BR')}
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              {renderAuditActionBadge(log.action)}
+                            </td>
+                            <td className="py-3 px-4">
+                              {log.targetRestaurantName ? (
+                                <span className="font-semibold text-slate-900 dark:text-white">
+                                  {log.targetRestaurantName}
+                                </span>
+                              ) : log.targetRestaurantId ? (
+                                <span className="font-mono text-[11px] text-slate-400">
+                                  {log.targetRestaurantId.slice(0, 8)}...
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic">Plataforma Global</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap text-slate-600 dark:text-stone-400">
+                              {log.actorEmail ? (
+                                <span className="font-medium text-slate-800 dark:text-stone-200">
+                                  {log.actorEmail}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic">Sistema (Trigger/Admin)</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-stone-400 max-w-xs truncate" title={JSON.stringify(log.details, null, 2)}>
+                              {formatAuditDetails(log.details)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </section>
             </div>
           )}

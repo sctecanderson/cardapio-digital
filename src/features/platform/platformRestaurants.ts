@@ -7,11 +7,13 @@ export interface CreatedRestaurant {
 }
 
 export type SubscriptionPlan = 'basic' | 'pro' | 'premium';
+export type PlatformBillingStatus = 'active' | 'grace_period' | 'expired';
 
 export interface PlatformRestaurant extends CreatedRestaurant {
   active: boolean;
   createdAt: string;
   adminCount: number;
+  adminEmails?: string[];
   archivedAt: string | null;
   subscriptionPlan: SubscriptionPlan;
   monthlyPriceCents: number;
@@ -21,6 +23,24 @@ export interface PlatformRestaurant extends CreatedRestaurant {
   subscriptionExpiresAt: string;
   billingCycleDays: number;
   daysRemaining: number;
+  billingStatus: PlatformBillingStatus;
+}
+
+export interface PlatformAuditLog {
+  id: string;
+  action:
+    | 'plan_changed'
+    | 'cycle_renewed'
+    | 'table_deleted'
+    | 'restaurant_suspended'
+    | 'restaurant_restored'
+    | 'catalog_updated'
+    | 'branding_updated';
+  targetRestaurantId: string | null;
+  targetRestaurantName: string;
+  actorEmail: string;
+  details: Record<string, unknown>;
+  createdAt: string;
 }
 
 function serverError(
@@ -152,12 +172,30 @@ export async function listPlatformRestaurants(): Promise<
         ? rawDaysRemaining
         : Math.ceil((Date.parse(subscriptionExpiresAt) - Date.now()) / 86400000);
 
+    const rawAdminEmails = (details.adminEmails ?? details.admin_emails) as unknown;
+    const adminEmails = Array.isArray(rawAdminEmails)
+      ? rawAdminEmails.filter((email): email is string => typeof email === 'string')
+      : [];
+
+    const rawStatus = (details.billingStatus ?? details.billing_status) as string | undefined;
+    const billingStatus: PlatformBillingStatus =
+      rawStatus === 'grace_period' || rawStatus === 'expired'
+        ? rawStatus
+        : rawStatus === 'active'
+        ? 'active'
+        : daysRemaining <= -3
+        ? 'expired'
+        : daysRemaining <= 0
+        ? 'grace_period'
+        : 'active';
+
     return {
       ...restaurant,
       active: details.active,
       archivedAt: details.archivedAt as string | null,
       createdAt: details.createdAt,
       adminCount: details.adminCount,
+      adminEmails,
       subscriptionPlan,
       monthlyPriceCents,
       maxTables,
@@ -166,6 +204,7 @@ export async function listPlatformRestaurants(): Promise<
       subscriptionExpiresAt,
       billingCycleDays,
       daysRemaining,
+      billingStatus,
     };
   });
 }
@@ -357,6 +396,7 @@ export interface UpdatedSaasPlan {
   subscriptionExpiresAt?: string;
   billingCycleDays?: number;
   daysRemaining?: number;
+  billingStatus?: PlatformBillingStatus;
 }
 
 export async function updateRestaurantSaasPlan(
@@ -414,6 +454,8 @@ export async function updateRestaurantSaasPlan(
 
     const expiresAt = String(directData.subscription_expires_at ?? new Date(Date.now() + targetCycleDays * 86400000).toISOString());
     const daysRemaining = Math.ceil((Date.parse(expiresAt) - Date.now()) / 86400000);
+    const billingStatus: PlatformBillingStatus =
+      daysRemaining <= -3 ? 'expired' : daysRemaining <= 0 ? 'grace_period' : 'active';
 
     return {
       id: String(directData.id),
@@ -429,6 +471,7 @@ export async function updateRestaurantSaasPlan(
       subscriptionExpiresAt: expiresAt,
       billingCycleDays: Number(directData.billing_cycle_days ?? targetCycleDays),
       daysRemaining,
+      billingStatus,
     };
   }
 
@@ -448,6 +491,18 @@ export async function updateRestaurantSaasPlan(
       ? rawDaysRemaining
       : Math.ceil((Date.parse(expiresAt) - Date.now()) / 86400000);
 
+  const rawStatus = (details.billingStatus ?? details.billing_status) as string | undefined;
+  const billingStatus: PlatformBillingStatus =
+    rawStatus === 'grace_period' || rawStatus === 'expired'
+      ? rawStatus
+      : rawStatus === 'active'
+      ? 'active'
+      : daysRemaining <= -3
+      ? 'expired'
+      : daysRemaining <= 0
+      ? 'grace_period'
+      : 'active';
+
   return {
     id: String(details.id),
     name: String(details.name),
@@ -462,6 +517,7 @@ export async function updateRestaurantSaasPlan(
     subscriptionExpiresAt: expiresAt,
     billingCycleDays: Number(details.billingCycleDays ?? details.billing_cycle_days ?? 30),
     daysRemaining,
+    billingStatus,
   };
 }
 
@@ -697,4 +753,53 @@ export async function updatePlatformPlanCatalog(
     premiumMaxTables: Number(d.premiumMaxTables ?? params.premiumMaxTables),
     syncedRestaurantsCount: Number(d.syncedRestaurantsCount ?? 0),
   };
+}
+
+export async function fetchPlatformAuditLogs(limit = 50): Promise<PlatformAuditLog[]> {
+  const { data, error } = await supabase.rpc('list_platform_audit_logs', {
+    p_limit: limit,
+  });
+
+  if (error) {
+    const { data: directData, error: directError } = await supabase
+      .from('platform_audit_logs')
+      .select('id, action, target_restaurant_id, target_restaurant_name, actor_email, details, created_at')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (directError) {
+      throw serverError(error, 'Não foi possível carregar o histórico de auditoria.');
+    }
+
+    if (!Array.isArray(directData)) {
+      return [];
+    }
+
+    return directData.map((row: Record<string, unknown>): PlatformAuditLog => ({
+      id: String(row.id),
+      action: row.action as PlatformAuditLog['action'],
+      targetRestaurantId: (row.target_restaurant_id as string | null) ?? null,
+      targetRestaurantName: String(row.target_restaurant_name || 'Plataforma'),
+      actorEmail: String(row.actor_email || 'superadmin'),
+      details: (row.details && typeof row.details === 'object' ? row.details : {}) as Record<string, unknown>,
+      createdAt: String(row.created_at || new Date().toISOString()),
+    }));
+  }
+
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.map((item: unknown): PlatformAuditLog => {
+    const record = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+    return {
+      id: String(record.id),
+      action: record.action as PlatformAuditLog['action'],
+      targetRestaurantId: ((record.targetRestaurantId ?? record.target_restaurant_id) as string | null) ?? null,
+      targetRestaurantName: String(record.targetRestaurantName ?? record.target_restaurant_name ?? 'Plataforma'),
+      actorEmail: String(record.actorEmail ?? record.actor_email ?? 'superadmin'),
+      details: (record.details && typeof record.details === 'object' ? record.details : {}) as Record<string, unknown>,
+      createdAt: String(record.createdAt ?? record.created_at ?? new Date().toISOString()),
+    };
+  });
 }

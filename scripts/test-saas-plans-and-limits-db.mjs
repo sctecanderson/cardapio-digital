@@ -22,6 +22,8 @@ await db.exec(`
 
   create table auth.users (
     id uuid primary key,
+    email text,
+    email_confirmed_at timestamptz default now(),
     is_anonymous boolean default false
   );
 
@@ -112,15 +114,18 @@ const regularUserId = '90000000-0000-4000-8000-000000000002';
 const testRestaurantId = '90000000-0000-4000-8000-000000000010';
 
 await db.exec(`
-  insert into auth.users (id, is_anonymous) values
-    ('${superAdminId}', false),
-    ('${regularUserId}', false);
+  insert into auth.users (id, email, is_anonymous) values
+    ('${superAdminId}', 'superadmin@elozi.com', false),
+    ('${regularUserId}', 'admin@cantina.com', false);
 
   insert into public.platform_admins (user_id, active) values
     ('${superAdminId}', true);
 
   insert into public.restaurants (id, name, slug, active) values
     ('${testRestaurantId}', 'Cantina do Teste', 'cantina-teste', true);
+
+  insert into public.restaurant_members (restaurant_id, user_id, role, active) values
+    ('${testRestaurantId}', '${regularUserId}', 'admin', true);
 `);
 
 // ----------------------------------------------------------------------------
@@ -744,6 +749,132 @@ const kdsPremiumResult = await runAs(superAdminId, {}, async () => {
 assert.ok(Array.isArray(kdsPremiumResult), 'KDS deve retornar array de itens no plano Premium');
 console.log('PASS: Acesso ao KDS autorizado com sucesso no plano Premium.');
 
+// --- Teste 13: Paywall de Inadimplência, Tolerância Operacional (Grace Period) e Projeção de Status (Bloco 12) ---
+console.log('\n--- Teste 13: Paywall de Inadimplência e Tolerância Operacional (Bloco 12) ---');
+
+const paywallRestId = '90000000-0000-4000-8000-000000000099';
+await db.exec(`
+  insert into public.restaurants (id, name, slug, active, subscription_plan, max_tables, subscription_expires_at)
+  values ('${paywallRestId}', 'Restaurante Paywall', 'restaurante-paywall', true, 'basic', 10, timezone('utc', now()) - interval '4 days');
+
+  insert into public.restaurant_members (restaurant_id, user_id, role, active)
+  values ('${paywallRestId}', '${regularUserId}', 'admin', true);
+
+  insert into public.restaurant_tables (restaurant_id, table_number, active, is_active)
+  values ('${paywallRestId}', 1, true, true);
+`);
+
+// 1. Status com 4 dias de vencido deve ser 'expired'
+const [{ get_restaurant_billing_status: statusExpired }] = await q(`
+  select public.get_restaurant_billing_status(timezone('utc', now()) - interval '4 days');
+`);
+assert.equal(statusExpired, 'expired', 'Vencimento há mais de 3 dias deve ser expired');
+
+// 2. Tentar abrir atendimento em restaurante 'expired' deve ser barrado com erro P0001
+await assert.rejects(
+  async () => {
+    await runAs(regularUserId, {}, async () => {
+      await q(`select public.open_table_visit('restaurante-paywall', 1);`);
+    });
+  },
+  (err) =>
+    err.code === 'P0001' &&
+    err.message.includes('A assinatura deste estabelecimento está suspensa por expiração do ciclo'),
+  'Atendimento em restaurante expired deve ser bloqueado com mensagem informativa'
+);
+console.log('PASS: Paywall de inadimplência bloqueou comanda aberta em restaurante expirado há 4 dias.');
+
+// 3. Atualizar para 1 dia de vencido -> deve entrar em 'grace_period'
+await db.exec(`
+  update public.restaurants
+  set subscription_expires_at = timezone('utc', now()) - interval '1 day'
+  where id = '${paywallRestId}';
+`);
+
+const [{ get_restaurant_billing_status: statusGrace }] = await q(`
+  select public.get_restaurant_billing_status(timezone('utc', now()) - interval '1 day');
+`);
+assert.equal(statusGrace, 'grace_period', 'Vencimento em até 3 dias deve ser grace_period');
+
+// 4. Abertura de atendimento no período de tolerância (grace period) DEVE SER PERMITIDA
+const graceVisit = await runAs(regularUserId, {}, async () => {
+  const [{ open_table_visit: visit }] = await q(`select public.open_table_visit('restaurante-paywall', 1);`);
+  return visit;
+});
+assert.ok(graceVisit, 'Atendimento deve abrir com sucesso durante a tolerância operacional');
+console.log('PASS: Tolerância operacional (grace period de 3 dias) autorizou abertura de atendimento.');
+
+// 5. Regularizar assinatura (ativo) e verificar projeções em list_platform_restaurants
+await runAs(superAdminId, {}, async () => {
+  await q(`
+    select public.update_restaurant_saas_plan(
+      '${paywallRestId}',
+      'basic',
+      9900,
+      10,
+      30,
+      true
+    );
+  `);
+});
+
+const listPlatform = await runAs(superAdminId, {}, async () => {
+  const [{ list_platform_restaurants: list }] = await q(`select public.list_platform_restaurants();`);
+  return list;
+});
+
+const paywallInList = listPlatform.find((r) => r.id === paywallRestId);
+assert.ok(paywallInList, 'Restaurante paywall deve constar na listagem da plataforma');
+assert.equal(paywallInList.billingStatus, 'active', 'Restaurante regularizado deve ter billingStatus active');
+assert.ok(Array.isArray(paywallInList.adminEmails), 'adminEmails deve ser um array');
+assert.ok(paywallInList.adminEmails.includes('admin@cantina.com'), 'adminEmails deve conter o email do administrador');
+console.log('PASS: Projeção de billingStatus e adminEmails em list_platform_restaurants confirmada.');
+
+// --- Teste 14: Registro Imutável de Auditoria da Plataforma (Bloco 12) ---
+console.log('\n--- Teste 14: Registro Imutável de Auditoria da Plataforma (Bloco 12) ---');
+
+// 1. Usuário comum não pode chamar a RPC list_platform_audit_logs
+await assert.rejects(
+  async () => {
+    await runAs(regularUserId, {}, async () => {
+      await q(`select public.list_platform_audit_logs(50);`);
+    });
+  },
+  (err) => err.code === '42501',
+  'Usuário comum não tem permissão para ler logs de auditoria'
+);
+
+// 2. RLS direto bloqueia leitura de usuário comum
+const userLogs = await runAs(regularUserId, {}, async () => {
+  return await q(`select * from public.platform_audit_logs;`);
+});
+assert.equal(userLogs.length, 0, 'RLS deve impedir visualização de logs por usuários comuns');
+console.log('PASS: RLS e controle de permissões em platform_audit_logs validados.');
+
+// 3. SuperAdmin lista os logs de auditoria
+const auditLogsList = await runAs(superAdminId, {}, async () => {
+  const [{ list_platform_audit_logs: logs }] = await q(`select public.list_platform_audit_logs(50);`);
+  return logs;
+});
+
+assert.ok(Array.isArray(auditLogsList), 'list_platform_audit_logs deve retornar um array');
+assert.ok(auditLogsList.length > 0, 'Deve haver registros de auditoria gravados automaticamente');
+
+// 4. Validar ações registradas
+const planChangeLog = auditLogsList.find((l) => l.action === 'plan_changed');
+assert.ok(planChangeLog, 'Deve haver log de alteração de plano (plan_changed)');
+assert.ok(planChangeLog.details.old_plan, 'Log de plano deve conter old_plan');
+assert.ok(planChangeLog.details.new_plan, 'Log de plano deve conter new_plan');
+
+const tableDeleteLog = auditLogsList.find((l) => l.action === 'table_deleted');
+assert.ok(tableDeleteLog, 'Deve haver log de exclusão de mesa (table_deleted)');
+assert.equal(tableDeleteLog.details.table_number, 1, 'Log de mesa deve registrar número da mesa');
+
+const catalogLog = auditLogsList.find((l) => l.action === 'catalog_updated');
+assert.ok(catalogLog, 'Deve haver log de atualização de catálogo (catalog_updated)');
+
+console.log(`PASS: ${auditLogsList.length} eventos de auditoria verificados com sucesso (plan_changed, table_deleted, catalog_updated).`);
+
 console.log('\n======================================================');
-console.log('TODOS OS 12 TESTES DE PLANOS SAAS, LIMITES, BRANDING, EXCLUSÃO E KDS FORAM APROVADOS!');
+console.log('TODOS OS 14 TESTES DE PLANOS SAAS, LIMITES, BRANDING, EXCLUSÃO, KDS, PAYWALL E AUDITORIA FORAM APROVADOS!');
 console.log('======================================================');
