@@ -1215,6 +1215,108 @@ const finalClosedVisit = await runAsStaff(adminUserId, 'admin', async () => {
 assert.equal(finalClosedVisit.status, 'closed');
 console.log('PASS: Atendimento finalizado com sucesso após fechamento prévio de todas as comandas.');
 
+// ============================================================================
+// TESTE 13: Cálculo de Comissão Acumulada no Histórico e Isolamento por Perfil
+// ============================================================================
+console.log('\n--- Teste 13: Cálculo de Comissão Acumulada e Isolamento por Perfil (Garçom vs Admin) ---');
+
+// 13.1 Criar atendimento para Garçom 2 com taxa aceita para comparar isolamento
+const [memberRecordWaiter2] = await q(`select id from public.restaurant_members where restaurant_id = '${demoRest.id}' and user_id = '${waiterStaffId2}';`);
+const visitMesa5 = await runAsStaff(waiterStaffId2, 'waiter', async () => {
+    const [v] = await q(`select * from public.open_table_visit('brasa', 5);`);
+    return v;
+});
+const tabMesa5 = await runAsStaff(waiterStaffId2, 'waiter', async () => {
+    const [t] = await q(`select * from public.create_table_tab('brasa', $1::uuid, 'Mesa 05', gen_random_uuid());`, [visitMesa5.id]);
+    return t;
+});
+await runAsStaff(waiterStaffId2, 'waiter', async () => {
+    await q(`select * from public.add_table_tab_item('brasa', $1::uuid, $2::uuid, 1, gen_random_uuid());`, [
+        tabMesa5.id,
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' // R$ 20.00
+    ]);
+});
+// Encerra comanda aceitando taxa de 10% (R$ 20.00 + R$ 2.00 = R$ 22.00; taxa = 200 cents)
+await runAsStaff(waiterStaffId2, 'waiter', async () => {
+    await q(`select * from public.close_table_tab('brasa', $1::uuid, true);`, [tabMesa5.id]);
+});
+// Encerra atendimento do Garçom 2
+await runAsStaff(waiterStaffId2, 'waiter', async () => {
+    await q(`select * from public.close_table_visit('brasa', $1::uuid);`, [visitMesa5.id]);
+});
+
+// 13.2 Função que simula a query de cálculo de comissão do frontend
+async function calculateCommissionSummary(staffUserIdParam, role, memberIdParam) {
+    return await runAsStaff(staffUserIdParam, role, async () => {
+        let querySql = `
+            select
+                v.id as visit_id,
+                v.status as visit_status,
+                v.assigned_member_id,
+                v.closed_at,
+                coalesce(
+                    json_agg(
+                        json_build_object(
+                            'id', t.id,
+                            'status', t.status,
+                            'service_fee_in_cents', t.service_fee_in_cents
+                        )
+                    ) filter (where t.id is not null),
+                    '[]'::json
+                ) as tabs
+            from public.table_visits v
+            left join public.table_tabs t on t.table_visit_id = v.id
+            where v.restaurant_id = '${demoRest.id}'
+              and v.status = 'closed'
+        `;
+
+        if (role === 'waiter') {
+            querySql += ` and v.assigned_member_id = '${memberIdParam}'`;
+        }
+
+        querySql += ` group by v.id, v.status, v.assigned_member_id, v.closed_at`;
+
+        const visitsRows = await q(querySql);
+
+        let totalFeeInCents = 0;
+        let distinctVisitsCount = 0;
+
+        for (const row of visitsRows) {
+            const tabs = typeof row.tabs === 'string' ? JSON.parse(row.tabs) : row.tabs;
+            const closedTabs = tabs.filter((t) => t.status === 'closed');
+            const visitFee = closedTabs.reduce((sum, t) => sum + (t.service_fee_in_cents || 0), 0);
+            totalFeeInCents += visitFee;
+            if (visitFee > 0) {
+                distinctVisitsCount += 1;
+            }
+        }
+
+        return { totalFeeInCents, distinctVisitsCount };
+    });
+}
+
+// 13.3 Testar cálculo para Garçom 2
+const waiter2Summary = await calculateCommissionSummary(waiterStaffId2, 'waiter', memberRecordWaiter2.id);
+assert.equal(waiter2Summary.totalFeeInCents, 500, 'Garçom 2 deve somar exatamente R$ 5,00 (500 cents) de taxa');
+assert.equal(waiter2Summary.distinctVisitsCount, 1, 'Garçom 2 deve registrar exatamente 1 atendimento com taxa');
+console.log('PASS: Garçom 2 calcula comissão individual restrita ao seu assigned_member_id.');
+
+// 13.4 Testar cálculo para Administrador (visão total da casa)
+const adminSummary = await calculateCommissionSummary(adminUserId, 'admin', adminMemberRecord.id);
+assert.ok(adminSummary.totalFeeInCents >= waiter2Summary.totalFeeInCents + 400, 'Admin deve somar taxas de todos os garçons');
+assert.ok(adminSummary.distinctVisitsCount >= 2, 'Admin deve registrar múltiplos atendimentos com taxa');
+console.log('PASS: Administrador consulta a Taxa de Serviço Total (Casa) agregando todas as comissões encerradas.');
+
+// 13.5 Atendimentos abertos não entram no cálculo de comissão
+const openVisit = await runAsStaff(waiterStaffId, 'waiter', async () => {
+    const [v] = await q(`select * from public.open_table_visit('brasa', 6);`);
+    return v;
+});
+const adminSummaryAfterOpen = await calculateCommissionSummary(adminUserId, 'admin', adminMemberRecord.id);
+assert.equal(adminSummaryAfterOpen.totalFeeInCents, adminSummary.totalFeeInCents, 'Atendimento aberto não altera o total de comissão liquidada');
+assert.equal(adminSummaryAfterOpen.distinctVisitsCount, adminSummary.distinctVisitsCount, 'Atendimento aberto não altera contagem de atendimentos encerrados');
+console.log('PASS: Atendimentos em aberto são estritamente excluídos da comissão liquidada.');
+
 console.log('\n======================================================');
-console.log('TODOS OS TESTES DO BLOCO 4 E GESTÃO DE CHAMADOS FORAM APROVADOS COM SUCESSO!');
+console.log('TODOS OS TESTES DO BLOCO 4, HISTÓRICO E COMISSÃO FORAM APROVADOS COM SUCESSO!');
 console.log('======================================================');

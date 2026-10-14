@@ -13,6 +13,7 @@ interface StateBase {
   userId: string | null;
   guestSessionId: string | null;
   tabId: string | null;
+  assignedWaiterName?: string | null;
 }
 
 export type GuestTabState =
@@ -57,6 +58,7 @@ export interface GuestTableTabContextRpcResult {
   expires_at: string;
   totalInCents: number;
   items: TabConsumptionItem[];
+  assignedWaiterName?: string | null;
 }
 
 export async function getGuestTabState(
@@ -98,6 +100,7 @@ export async function getGuestTabState(
 
   if (!ctxError && ctxData) {
     base.guestSessionId = ctxData.session_id;
+    base.assignedWaiterName = ctxData.assignedWaiterName ?? null;
 
     if (ctxData.status === 'revoked') {
       return { ...base, status: 'closed' };

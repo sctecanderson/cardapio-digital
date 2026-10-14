@@ -533,4 +533,48 @@ res = await runAsAuthenticated(anonUser2, true, () =>
 assert.equal(res[0].ctx, null, 'Cliente sem sessao vinculada recebe null');
 console.log('PASS: Isolamento multi-tenant e sessao estrita preservados no get_guest_table_tab_context');
 
+// TESTE 17: Atualizacao de display_name pelo membro da equipe via update_own_staff_display_name
+const updateRes = await runAsAuthenticated(staffUser, false, () =>
+  q('select public.update_own_staff_display_name($1, $2) as name', ['brasa', 'Anderson'])
+);
+assert.equal(updateRes[0].name, 'Anderson', 'Nome de exibicao deve ser Anderson');
+
+const memberCheck = await runAsSuperuser(() =>
+  q('select display_name from public.restaurant_members where id = $1', [memberId])
+);
+assert.equal(memberCheck[0].display_name, 'Anderson', 'display_name deve ter sido persistido no banco');
+console.log('PASS: Membro atualiza display_name com sucesso via update_own_staff_display_name');
+
+// TESTE 18: Bloqueio de anonimo chamar update_own_staff_display_name
+await assert.rejects(
+  async () => {
+    await runAsAuthenticated(anonUser1, true, () =>
+      q('select public.update_own_staff_display_name($1, $2)', ['brasa', 'Hacker'])
+    );
+  },
+  (err) => err.message.includes('42501') || err.message.includes('Acesso negado'),
+  'Tentativa de anonimo alterar display_name deve ser bloqueada com 42501'
+);
+console.log('PASS: Tentativa de anonimo chamar update_own_staff_display_name e bloqueada com 42501');
+
+// TESTE 19: Validacao de tamanho de display_name (menos de 2 caracteres deve falhar)
+await assert.rejects(
+  async () => {
+    await runAsAuthenticated(staffUser, false, () =>
+      q('select public.update_own_staff_display_name($1, $2)', ['brasa', 'A'])
+    );
+  },
+  (err) => err.message.includes('22023') || err.message.includes('entre 2 e 40 caracteres'),
+  'display_name com menos de 2 caracteres deve falhar com 22023'
+);
+console.log('PASS: display_name invalido (< 2 chars) e rejeitado com 22023');
+
+// TESTE 20: get_guest_table_tab_context projeta assignedWaiterName corretamente para o cliente
+res = await runAsAuthenticated(anonUser1, true, () =>
+  q('select public.get_guest_table_tab_context($1, $2) as ctx', ['brasa', 1])
+);
+const ctxWithWaiter = typeof res[0].ctx === 'string' ? JSON.parse(res[0].ctx) : res[0].ctx;
+assert.equal(ctxWithWaiter.assignedWaiterName, 'Anderson', 'Cliente deve receber assignedWaiterName como Anderson');
+console.log('PASS: get_guest_table_tab_context projeta assignedWaiterName ("Anderson") para o cliente na mesa');
+
 console.log('\n--- TODOS OS TESTES SQL DE PERMISSÕES E BANCO REAL PASSARAM COM 100% DE SUCESSO! ---');

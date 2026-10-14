@@ -11,6 +11,7 @@ export interface ServiceRequest {
     created_at: string;
     resolved_at: string | null;
     resolved_by_member_id: string | null;
+    waiter_name?: string | null;
 }
 
 export interface WaiterRequestState {
@@ -110,6 +111,9 @@ function parseServiceRequest(value: unknown): ServiceRequest {
         created_at,
         resolved_at,
         resolved_by_member_id,
+        waiter_name: typeof (value as { waiter_name?: unknown }).waiter_name === 'string'
+            ? (value as { waiter_name: string }).waiter_name
+            : null,
     };
 }
 

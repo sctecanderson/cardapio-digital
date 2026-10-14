@@ -5,6 +5,7 @@ export interface StaffAccess {
   restaurantId: string;
   userId: string;
   role: 'admin' | 'waiter';
+  displayName?: string | null;
 }
 
 export async function getStaffAccess(
@@ -50,7 +51,7 @@ export async function getStaffAccess(
     error: memberError,
   } = await supabase
     .from('restaurant_members')
-    .select('id, restaurant_id, user_id, role')
+    .select('id, restaurant_id, user_id, role, display_name')
     .eq('restaurant_id', restaurant.id)
     .eq('user_id', user.id)
     .eq('active', true)
@@ -74,7 +75,25 @@ export async function getStaffAccess(
     restaurantId: member.restaurant_id,
     userId: member.user_id,
     role: member.role,
+    displayName: member.display_name ?? null,
   };
+}
+
+export async function updateStaffDisplayName(
+  restaurantSlug: string,
+  displayName: string,
+): Promise<string | null> {
+  const trimmed = displayName.trim();
+  const { data, error } = await supabase.rpc('update_own_staff_display_name', {
+    p_restaurant_slug: restaurantSlug,
+    p_display_name: trimmed.length > 0 ? trimmed : null,
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível atualizar seu nome.');
+  }
+
+  return (data as string | null) ?? null;
 }
 
 export async function signInStaff(

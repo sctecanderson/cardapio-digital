@@ -19,6 +19,8 @@ import { useTableContext, getTableQueryString } from "../features/tables/useTabl
 import { RequireStaffAccess } from "../features/auth/RequireStaffAccess";
 import { ThemeProvider, useTheme } from "../features/theme/ThemeContext";
 import { ThemeToggleButton } from "../features/theme/ThemeToggleButton";
+import { StaffCommissionProvider } from "../features/service/StaffCommissionContext";
+import { StaffCommissionHeaderPill } from "../features/service/StaffCommissionHeaderPill";
 
 const ProductPage = lazy(() =>
   import("../features/menu/ProductPage").then((m) => ({
@@ -174,6 +176,7 @@ function RestaurantLayout() {
   const isExplore = location.pathname.split("/")[2] === "explorar";
   const isProduct = location.pathname.split("/")[2] === "produto";
   const isEquipe = location.pathname.split("/")[2] === "equipe";
+  const isStaffHistory = isEquipe && location.pathname.split("/")[3] === "historico";
   if (isExplore) {
     return (
       <div className="restaurant explore-viewport" data-theme={themeMode} style={theme}>
@@ -213,46 +216,51 @@ function RestaurantLayout() {
       </div>
     );
   return (
-    <div className={`restaurant ${isEquipe ? 'staff-site' : 'public-site'}`} data-theme={themeMode} style={theme}>
-      <a href="#content" className="skip-link">
-        Pular para o conteúdo
-      </a>
-      <div className="shell">
-        {!isProduct && (
-          <>
-            <header className="public-header">
-              <Link
-                to={isEquipe ? `/${restaurant.slug}/equipe` : `/${restaurant.slug}${tableQuery}`}
-                aria-label={`${restaurant.name}, início`}
-                className="wordmark"
-              >
-                {restaurant.logo ? (
-                  <img
-                    src={restaurant.logo.url}
-                    className="public-logo"
-                    alt={restaurant.name}
-                  />
-                ) : (
-                  <>
-                    {restaurant.name}
-                    <span>{restaurant.subtitle}</span>
-                  </>
-                )}
-              </Link>
-              <div className="public-header-actions">
-                {!isEquipe && (
-                  <span className="badge public-table-badge">
-                    {table.status === "unverified"
-                      ? `Mesa ${table.tableNumber}`
-                      : table.status === "invalid"
-                        ? "Mesa inválida"
-                        : "Consulta sem mesa"}
-                  </span>
-                )}
-                <ThemeToggleButton />
-              </div>
-            </header>
-            {isEquipe ? (
+    <StaffCommissionProvider>
+      <div className={`restaurant ${isEquipe ? 'staff-site' : 'public-site'}`} data-theme={themeMode} style={theme}>
+        <a href="#content" className="skip-link">
+          Pular para o conteúdo
+        </a>
+        <div className="shell">
+          {!isProduct && (
+            <>
+              <header className="public-header">
+                <Link
+                  to={isEquipe ? `/${restaurant.slug}/equipe` : `/${restaurant.slug}${tableQuery}`}
+                  aria-label={`${restaurant.name}, início`}
+                  className="wordmark"
+                >
+                  {restaurant.logo ? (
+                    <img
+                      src={restaurant.logo.url}
+                      className="public-logo"
+                      alt={restaurant.name}
+                    />
+                  ) : (
+                    <>
+                      {restaurant.name}
+                      <span>{restaurant.subtitle}</span>
+                    </>
+                  )}
+                </Link>
+                <div className="public-header-actions">
+                  {!isEquipe && (
+                    <span className="badge public-table-badge">
+                      {table.status === "unverified"
+                        ? `Mesa ${table.tableNumber}`
+                        : table.status === "invalid"
+                          ? "Mesa inválida"
+                          : "Consulta sem mesa"}
+                    </span>
+                  )}
+                  {isStaffHistory ? (
+                    <StaffCommissionHeaderPill />
+                  ) : (
+                    <ThemeToggleButton />
+                  )}
+                </div>
+              </header>
+              {isEquipe ? (
               <nav className="tabs public-tabs" aria-label="Navegação da equipe">
                 <NavLink end to={`/${restaurant.slug}/equipe`}>
                   Atendimento
@@ -294,6 +302,7 @@ function RestaurantLayout() {
         </main>
       </div>
     </div>
+    </StaffCommissionProvider>
   );
 }
 function Access() {
