@@ -501,7 +501,13 @@ export function ServiceActionPopup({
                         </div>
 
                         <p className="service-popup-desc">
-                            Um funcionário assumiu sua solicitação e está a caminho da {tableLabel}.
+                            {waiterState?.request?.waiter_name ? (
+                                <>
+                                    O garçom <strong>{waiterState.request.waiter_name}</strong> assumiu sua solicitação e está a caminho da {tableLabel}.
+                                </>
+                            ) : (
+                                `Um funcionário assumiu sua solicitação e está a caminho da ${tableLabel}.`
+                            )}
                         </p>
 
                         <div className="service-popup-actions single">

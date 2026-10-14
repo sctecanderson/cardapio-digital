@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useOutletContext } from 'react-router';
 import type { StaffAccess } from '../auth/staffAuth';
 import { supabase } from '../../lib/supabase';
+import { useStaffCommission } from './StaffCommissionContext';
+import { getTimezoneUtcRange, toTimezoneDateString } from './staffDateUtils';
 
 interface ClosedVisit {
     id: string;
@@ -55,54 +57,6 @@ const currency = new Intl.NumberFormat('pt-BR', {
     currency: 'BRL',
 });
 
-function toTimezoneDateString(dateInput: Date | string, timeZone: string): string {
-    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-    const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-    }).formatToParts(d);
-    const year = parts.find((p) => p.type === 'year')?.value;
-    const month = parts.find((p) => p.type === 'month')?.value;
-    const day = parts.find((p) => p.type === 'day')?.value;
-    return `${year}-${month}-${day}`;
-}
-
-export function getTimezoneUtcRange(dateStr: string, timeZone: string): { startUtc: string; nextDayStartUtc: string } {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        second: 'numeric',
-        hour12: false,
-    });
-
-    const testDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
-    const parts = formatter.formatToParts(testDate);
-    const tzYear = Number(parts.find((p) => p.type === 'year')?.value);
-    const tzMonth = Number(parts.find((p) => p.type === 'month')?.value);
-    const tzDay = Number(parts.find((p) => p.type === 'day')?.value);
-    let tzHour = Number(parts.find((p) => p.type === 'hour')?.value);
-    if (tzHour === 24) tzHour = 0;
-    const tzMin = Number(parts.find((p) => p.type === 'minute')?.value);
-
-    const tzTimeAsUtc = Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMin, 0);
-    const offsetMs = tzTimeAsUtc - testDate.getTime();
-
-    const startUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0) - offsetMs;
-    const nextDayUtcMs = startUtcMs + 24 * 60 * 60 * 1000;
-
-    return {
-        startUtc: new Date(startUtcMs).toISOString(),
-        nextDayStartUtc: new Date(nextDayUtcMs).toISOString(),
-    };
-}
-
 const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 interface WeekDayOption {
@@ -138,8 +92,14 @@ function getWeekDaysAround(centerDate: Date, timeZone: string): WeekDayOption[] 
     return days;
 }
 
+interface CommissionSummary {
+    totalFeeInCents: number;
+    distinctVisitsCount: number;
+}
+
 export function StaffHistoryPage() {
     const access = useOutletContext<StaffAccess>();
+    const { isPrivate, setHistoryCommissionInCents } = useStaffCommission();
 
     const [timezone, setTimezone] = useState<string>('America/Sao_Paulo');
     const [visits, setVisits] = useState<ClosedVisit[]>([]);
@@ -152,10 +112,24 @@ export function StaffHistoryPage() {
     // Filtro por data
     const [selectedDate, setSelectedDate] = useState<string>('');
 
+    // Resumo financeiro de comissão (taxa de serviço)
+    const [commissionSummary, setCommissionSummary] = useState<CommissionSummary>({
+        totalFeeInCents: 0,
+        distinctVisitsCount: 0,
+    });
+    const [loadingCommission, setLoadingCommission] = useState(true);
+
     // ID do atendimento expandido
     const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null);
     const [detailsMap, setDetailsMap] = useState<Record<string, VisitConsumptionDetails>>({});
     const [loadingDetails, setLoadingDetails] = useState<Record<string, boolean>>({});
+
+    // Sincroniza limpeza no unmount
+    useEffect(() => {
+        return () => {
+            setHistoryCommissionInCents(null);
+        };
+    }, [setHistoryCommissionInCents]);
 
     // Carrega o fuso horário configurado do restaurante
     useEffect(() => {
@@ -209,11 +183,14 @@ export function StaffHistoryPage() {
                         table:restaurant_tables!inner(table_number)
                     `)
                     .eq('restaurant_id', access.restaurantId)
-                    .eq('assigned_member_id', access.memberId)
                     .eq('status', 'closed')
                     .order('closed_at', { ascending: false })
                     .order('id', { ascending: false })
                     .range(from, to);
+
+                if (access.role === 'waiter') {
+                    query = query.eq('assigned_member_id', access.memberId);
+                }
 
                 if (dateFilter) {
                     const { startUtc, nextDayStartUtc } = getTimezoneUtcRange(dateFilter, timezone);
@@ -245,14 +222,87 @@ export function StaffHistoryPage() {
                 setLoadingMore(false);
             }
         },
-        [access.restaurantId, access.memberId, timezone],
+        [access.restaurantId, access.memberId, access.role, timezone],
+    );
+
+    const fetchCommissionSummary = useCallback(
+        async (dateFilter: string) => {
+            setLoadingCommission(true);
+            try {
+                let query = supabase
+                    .from('table_visits')
+                    .select(`
+                        id,
+                        status,
+                        closed_at,
+                        assigned_member_id,
+                        table_tabs (
+                            id,
+                            status,
+                            service_fee_in_cents
+                        )
+                    `)
+                    .eq('restaurant_id', access.restaurantId)
+                    .eq('status', 'closed');
+
+                if (access.role === 'waiter') {
+                    query = query.eq('assigned_member_id', access.memberId);
+                }
+
+                if (dateFilter) {
+                    const { startUtc, nextDayStartUtc } = getTimezoneUtcRange(dateFilter, timezone);
+                    query = query.gte('closed_at', startUtc).lt('closed_at', nextDayStartUtc);
+                }
+
+                const { data, error: qErr } = await query;
+                if (qErr) throw qErr;
+
+                let totalFeeInCents = 0;
+                let distinctVisitsCount = 0;
+
+                for (const visit of (data ?? []) as Array<{
+                    id: string;
+                    status: string;
+                    closed_at: string | null;
+                    assigned_member_id: string;
+                    table_tabs: Array<{
+                        id: string;
+                        status: 'open' | 'closed';
+                        service_fee_in_cents: number | null;
+                    }> | null;
+                }>) {
+                    const closedTabs = (visit.table_tabs ?? []).filter((tab) => tab.status === 'closed');
+                    const visitFee = closedTabs.reduce((sum, tab) => sum + (tab.service_fee_in_cents || 0), 0);
+                    totalFeeInCents += visitFee;
+                    if (visitFee > 0) {
+                        distinctVisitsCount += 1;
+                    }
+                }
+
+                setCommissionSummary({
+                    totalFeeInCents,
+                    distinctVisitsCount,
+                });
+                setHistoryCommissionInCents(totalFeeInCents);
+            } catch {
+                setCommissionSummary({
+                    totalFeeInCents: 0,
+                    distinctVisitsCount: 0,
+                });
+                setHistoryCommissionInCents(0);
+            } finally {
+                setLoadingCommission(false);
+            }
+        },
+        [access.restaurantId, access.memberId, access.role, timezone, setHistoryCommissionInCents],
     );
 
     // Carrega quando a data ou restaurante muda
     useEffect(() => {
         setPage(0);
         void fetchVisits(0, selectedDate, false);
-    }, [selectedDate, fetchVisits]);
+        void fetchCommissionSummary(selectedDate);
+    }, [selectedDate, fetchVisits, fetchCommissionSummary]);
 
     function handleLoadMore() {
         if (loadingMore || !hasMore) return;
@@ -336,6 +386,23 @@ export function StaffHistoryPage() {
         }).format(dateObj);
     }, [selectedDate, timezone]);
 
+    const todayStr = useMemo(() => toTimezoneDateString(new Date(), timezone), [timezone]);
+    const isPastDay = Boolean(selectedDate && selectedDate < todayStr);
+
+    const selectedDateShort = useMemo(() => {
+        if (!selectedDate) return null;
+        const [year, month, day] = selectedDate.split('-').map(Number);
+        const dateObj = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+        const weekday = new Intl.DateTimeFormat('pt-BR', {
+            timeZone: timezone,
+            weekday: 'long',
+        }).format(dateObj);
+        const formattedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+        const dayStr = String(day).padStart(2, '0');
+        const monthStr = String(month).padStart(2, '0');
+        return `${formattedWeekday}, ${dayStr}/${monthStr}`;
+    }, [selectedDate, timezone]);
+
     return (
         <section className="mx-auto max-w-xl pb-12">
             <div className="mb-5">
@@ -390,20 +457,37 @@ export function StaffHistoryPage() {
                 </div>
             </div>
 
-            {/* Status do Filtro Atual */}
-            {selectedDateDisplay && (
-                <div className="mb-4 flex items-center justify-between bg-[#fffaf4] border border-[#ebdccb] px-3.5 py-2.5 rounded-xl text-xs">
-                    <div>
-                        <span className="font-semibold text-[#7a6655]">Exibindo: </span>
-                        <strong className="capitalize text-[var(--ink,#2b1d17)]">
-                            {selectedDateDisplay}
-                        </strong>
-                    </div>
-                    <span className="text-[#8c7867] font-medium">
-                        {visits.length} atendimento{visits.length !== 1 ? 's' : ''}
+            {/* =========================================================
+                FAIXA DE RESUMO DO PERÍODO SELECIONADO
+               ========================================================= */}
+            <div className="mb-4 rounded-xl border border-[#ebdccb] bg-[#fffaf4] p-3.5 text-xs shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ebdccb]/70 pb-2">
+                    <span className="font-bold text-sm text-[#1c1917]">
+                        {selectedDate
+                            ? `${selectedDateShort} • ${visits.length} atendimento${visits.length !== 1 ? 's' : ''}`
+                            : `Geral / Todas as datas • ${visits.length} atendimento${visits.length !== 1 ? 's' : ''}`}
                     </span>
                 </div>
-            )}
+                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 font-semibold text-[#1c1917]">
+                        <span className="text-[#655446]">
+                            {selectedDate ? 'Valor total do dia:' : 'Valor total do período:'}
+                        </span>
+                        <strong className="text-emerald-700 font-extrabold font-mono text-sm">
+                            {isPrivate ? 'R$ --,--' : currency.format(commissionSummary.totalFeeInCents / 100)}
+                        </strong>
+                    </div>
+                    {isPastDay ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            ✓ Expediente finalizado / Valor consolidado
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-200">
+                            Em apuração no expediente
+                        </span>
+                    )}
+                </div>
+            </div>
 
             {loading ? (
                 <p role="status" className="py-6 text-sm opacity-75">
@@ -449,7 +533,7 @@ export function StaffHistoryPage() {
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <span className="font-bold text-base text-[var(--ink,#2b1d17)]">
+                                                <span className="font-bold text-base text-[#1c1917]">
                                                     Mesa {String(visit.table.table_number).padStart(2, '0')}
                                                 </span>
                                                 <span className="text-[11px] rounded-full bg-[#f4eee5] px-2 py-0.5 font-semibold text-[#655446]">
@@ -523,7 +607,7 @@ export function StaffHistoryPage() {
                                                             >
                                                                 {/* Título da Comanda */}
                                                                 <div className="flex items-center justify-between pb-2 border-b border-[#f4ede3]">
-                                                                    <h4 className="font-bold text-sm text-[var(--ink,#2b1d17)]">
+                                                                    <h4 className="font-bold text-sm text-[#1c1917]">
                                                                         Comanda {tab.label}
                                                                     </h4>
                                                                     <span className="text-[11px] font-semibold text-[#7a6655]">
@@ -590,7 +674,7 @@ export function StaffHistoryPage() {
                                                                         <span className="font-bold text-[#7a6655]">
                                                                             Total da comanda
                                                                         </span>
-                                                                        <strong className="font-bold text-sm text-[var(--ink,#2b1d17)]">
+                                                                        <strong className="font-bold text-sm text-[#1c1917]">
                                                                             {currency.format(tabTotalInCents / 100)}
                                                                         </strong>
                                                                     </div>
@@ -601,7 +685,7 @@ export function StaffHistoryPage() {
 
                                                     {/* Total Geral da Mesa */}
                                                     <div className="rounded-xl bg-white border border-[#ded5c8] p-3 flex items-center justify-between">
-                                                        <span className="font-bold text-sm text-[var(--ink,#2b1d17)]">
+                                                        <span className="font-bold text-sm text-[#1c1917]">
                                                             Total Geral da Mesa
                                                         </span>
                                                         <strong className="font-extrabold text-base text-[var(--brand,#b9472b)]">
@@ -624,7 +708,7 @@ export function StaffHistoryPage() {
                                 type="button"
                                 disabled={loadingMore}
                                 onClick={handleLoadMore}
-                                className="w-full py-3 rounded-xl border border-[#ebdccb] bg-white font-bold text-xs text-[var(--ink,#2b1d17)] hover:bg-[#fffdfa] transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                                className="w-full py-3 rounded-xl border border-[#ebdccb] bg-white font-bold text-xs text-[#1c1917] hover:bg-[#fffdfa] transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
                             >
                                 {loadingMore ? 'Carregando mais atendimentos…' : 'Carregar mais atendimentos'}
                             </button>

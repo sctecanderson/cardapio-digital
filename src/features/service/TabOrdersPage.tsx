@@ -836,7 +836,13 @@ function TabOrdersContent({
                             </div>
                             <h2>Presença Confirmada!</h2>
                             <p>
-                                O garçom já confirmou sua mesa no sistema. Ele está preparando sua comanda e logo começará a lançar os pedidos.
+                                {tabState?.assignedWaiterName ? (
+                                    <>
+                                        O garçom <strong>{tabState.assignedWaiterName}</strong> já confirmou sua mesa no sistema. Ele está preparando sua comanda e logo começará a lançar os pedidos.
+                                    </>
+                                ) : (
+                                    'O garçom já confirmou sua mesa no sistema. Ele está preparando sua comanda e logo começará a lançar os pedidos.'
+                                )}
                             </p>
                             <div className="tab-code-waiting-pulse">
                                 <span className="tab-pulse-dot" />
@@ -860,7 +866,13 @@ function TabOrdersContent({
                                     <span className="empty-icon">🍽️</span>
                                     <h3>Comanda conectada!</h3>
                                     <p>
-                                        Nenhum pedido lançado ainda. Assim que o garçom registrar seus pedidos na tela dele, eles aparecerão aqui em tempo real.
+                                        {tabState?.assignedWaiterName ? (
+                                            <>
+                                                Nenhum pedido lançado ainda. Assim que o garçom <strong>{tabState.assignedWaiterName}</strong> registrar seus pedidos na tela dele, eles aparecerão aqui em tempo real.
+                                            </>
+                                        ) : (
+                                            'Nenhum pedido lançado ainda. Assim que o garçom registrar seus pedidos na tela dele, eles aparecerão aqui em tempo real.'
+                                        )}
                                     </p>
                                     <Link
                                         to={`/${restaurantSlug}${tableQuery}`}
