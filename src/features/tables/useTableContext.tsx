@@ -88,8 +88,13 @@ export function TableProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Aguarda o restaurante ser resolvido pelo Provider antes de validar
+      if (!restaurant) {
+        return;
+      }
+
       // 2. Trava de inadimplência SaaS
-      if (restaurant?.billingStatus === 'expired') {
+      if (restaurant.billingStatus === 'expired') {
         if (!cancelled) {
           setTableState({
             status: 'expired',
@@ -237,7 +242,7 @@ export function TableProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [tParam, legacyMesaParam, restaurant.id, restaurant.billingStatus, restaurantSlug]);
+  }, [tParam, legacyMesaParam, restaurant?.id, restaurant?.billingStatus, restaurantSlug]);
 
   return (
     <TableReactContext.Provider value={tableState}>

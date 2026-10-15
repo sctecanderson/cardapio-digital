@@ -12,7 +12,9 @@ export function getTableQrCodeUrl(restaurantSlug: string, tableId: string): stri
   const origin = typeof window !== 'undefined' && window.location?.origin
     ? window.location.origin
     : 'https://app.elozi.com.br';
-  return `${origin}/${restaurantSlug}?t=${tableId}`;
+  const cleanSlug = encodeURIComponent((restaurantSlug || '').trim());
+  const cleanTableId = encodeURIComponent((tableId || '').trim());
+  return `${origin}/${cleanSlug}?t=${cleanTableId}`;
 }
 
 /**
