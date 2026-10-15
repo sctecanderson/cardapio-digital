@@ -15,7 +15,7 @@ import {
 import { PublicMenuProvider } from "../features/menu/PublicMenuProvider";
 import { MenuPage } from "../features/menu/MenuPage";
 import { HomePage } from "../features/menu/HomePage";
-import { useTableContext, getTableQueryString } from "../features/tables/useTableContext";
+import { useTableContext, getTableQueryString, TableProvider } from "../features/tables/useTableContext";
 import { RequireStaffAccess } from "../features/auth/RequireStaffAccess";
 import { ThemeProvider, useTheme } from "../features/theme/ThemeContext";
 import { ThemeToggleButton } from "../features/theme/ThemeToggleButton";
@@ -145,7 +145,9 @@ function RestaurantRoot() {
   return (
     <ThemeProvider>
       <RestaurantProvider key={restaurantSlug} slug={restaurantSlug}>
-        <Outlet />
+        <TableProvider>
+          <Outlet />
+        </TableProvider>
       </RestaurantProvider>
     </ThemeProvider>
   );
@@ -255,7 +257,11 @@ function RestaurantLayout() {
                         ? `Mesa ${table.tableNumber}`
                         : table.status === "invalid"
                           ? "Mesa inválida"
-                          : "Consulta sem mesa"}
+                          : table.status === "expired"
+                            ? "Atendimento indisponível"
+                            : table.status === "loading"
+                              ? "Identificando mesa…"
+                              : "Consulta sem mesa"}
                     </span>
                   )}
                   {isStaffHistory ? (

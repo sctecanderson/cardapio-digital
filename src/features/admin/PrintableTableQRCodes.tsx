@@ -5,11 +5,14 @@ import type { AdminTable } from './restaurantAdmin';
 
 /**
  * Retorna a URL canônica e segura para o QR Code da mesa.
- * Formato obrigatório: https://app.elozi.com.br/[restaurant.slug]?t=[table.id]
+ * Formato dinâmico: [window.location.origin]/[restaurant.slug]?t=[table.id]
  * A URL NUNCA expõe o número sequencial da mesa.
  */
 export function getTableQrCodeUrl(restaurantSlug: string, tableId: string): string {
-  return `https://app.elozi.com.br/${restaurantSlug}?t=${tableId}`;
+  const origin = typeof window !== 'undefined' && window.location?.origin
+    ? window.location.origin
+    : 'https://app.elozi.com.br';
+  return `${origin}/${restaurantSlug}?t=${tableId}`;
 }
 
 /**

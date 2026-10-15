@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { supabase } from '../../lib/supabase';
-import { useTableContext } from '../tables/useTableContext';
+import { useTableContext, getTableQueryString } from '../tables/useTableContext';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
 import { usePublicMenu } from '../menu/PublicMenuProvider';
 import { getGuestTabState } from './guestTab';
@@ -45,7 +45,55 @@ export function TabOrdersPage() {
 
     const hasValidTable = table.status === 'unverified';
     const tableNumber = hasValidTable ? Number(table.tableNumber) : null;
-    const tableQuery = hasValidTable ? `?mesa=${table.tableNumber}` : '';
+    const tableQuery = hasValidTable ? getTableQueryString(table) : '';
+
+    if (table.status === 'expired') {
+        return (
+            <div className="tab-orders-page">
+                <header className="tab-orders-header">
+                    <div className="tab-orders-title-row">
+                        <h1 className="tab-orders-title">Comanda Digital</h1>
+                        <span className="tab-orders-status-badge" style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}>
+                            Atendimento Indisponível
+                        </span>
+                    </div>
+                </header>
+
+                <div className="tab-hero-card">
+                    <div className="tab-hero-icon" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="15" y1="9" x2="9" y2="15" />
+                            <line x1="9" y1="9" x2="15" y2="15" />
+                        </svg>
+                    </div>
+                    <h2>Atendimento temporariamente indisponível</h2>
+                    <p>
+                        Os serviços digitais deste estabelecimento estão suspensos no momento. Por gentileza, solicite atendimento diretamente à equipe presencial.
+                    </p>
+                    <Link
+                        to={`/${restaurantSlug}`}
+                        className="tab-hero-primary-btn"
+                        style={{ maxWidth: '280px', minHeight: '44px', fontSize: '14px', textDecoration: 'none' }}
+                    >
+                        Ver Cardápio Digital
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
+    if (table.status === 'loading') {
+        return (
+            <div className="tab-orders-page">
+                <div className="tab-hero-card" style={{ padding: '48px 16px', textAlign: 'center' }}>
+                    <p role="status" className="text-xs opacity-60">
+                        Identificando sua mesa pelo QR Code…
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     if (!hasValidTable || tableNumber === null) {
         return (
