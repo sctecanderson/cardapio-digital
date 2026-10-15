@@ -25,6 +25,9 @@ export interface RestaurantIdentity extends Restaurant {
   maxTables?: number;
   subscriptionExpiresAt?: string | null;
   billingStatus?: 'active' | 'grace_period' | 'expired';
+  brandPrimaryColor?: string;
+  headerNameColor?: string;
+  headerSubtitleColor?: string;
 }
 export interface IdentityMedia {
   url: string;
@@ -103,6 +106,24 @@ export function parseRestaurant(value: unknown): RestaurantIdentity {
     )
       throw new Error("Imagem da identidade inválida.");
   }
+  const brandPrimaryColor =
+    typeof v.brandPrimaryColor === "string"
+      ? v.brandPrimaryColor
+      : typeof v.brand_primary_color === "string"
+      ? v.brand_primary_color
+      : (theme.primary as string) || "#ea580c";
+  const headerNameColor =
+    typeof v.headerNameColor === "string"
+      ? v.headerNameColor
+      : typeof v.header_name_color === "string"
+      ? v.header_name_color
+      : "#1c1917";
+  const headerSubtitleColor =
+    typeof v.headerSubtitleColor === "string"
+      ? v.headerSubtitleColor
+      : typeof v.header_subtitle_color === "string"
+      ? v.header_subtitle_color
+      : "#57534e";
   return {
     ...(value as RestaurantIdentity),
     serviceFeePercent,
@@ -111,6 +132,9 @@ export function parseRestaurant(value: unknown): RestaurantIdentity {
     maxTables,
     subscriptionExpiresAt,
     billingStatus,
+    brandPrimaryColor,
+    headerNameColor,
+    headerSubtitleColor,
   };
 }
 interface ContextValue {

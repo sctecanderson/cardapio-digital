@@ -17,7 +17,22 @@ function release(m: Media) {
 }
 export function IdentityPage() {
   const { restaurant, reload } = useRestaurant();
-  const [draft, setDraft] = useState<RestaurantIdentity>(restaurant);
+  const [draft, setDraft] = useState<RestaurantIdentity>(() => ({
+    ...restaurant,
+    brandPrimaryColor:
+      restaurant.brandPrimaryColor ||
+      restaurant.brand_primary_color ||
+      restaurant.theme.primary ||
+      "#ea580c",
+    headerNameColor:
+      restaurant.headerNameColor ||
+      restaurant.header_name_color ||
+      "#1c1917",
+    headerSubtitleColor:
+      restaurant.headerSubtitleColor ||
+      restaurant.header_subtitle_color ||
+      "#57534e",
+  }));
   const [logo, setLogo] = useState<Media>(restaurant.logo);
   const [cover, setCover] = useState<Media>(restaurant.cover);
   const [busy, setBusy] = useState(false);
@@ -100,7 +115,22 @@ export function IdentityPage() {
   function reset() {
     release(logo);
     release(cover);
-    setDraft(restaurant);
+    setDraft({
+      ...restaurant,
+      brandPrimaryColor:
+        restaurant.brandPrimaryColor ||
+        restaurant.brand_primary_color ||
+        restaurant.theme.primary ||
+        "#ea580c",
+      headerNameColor:
+        restaurant.headerNameColor ||
+        restaurant.header_name_color ||
+        "#1c1917",
+      headerSubtitleColor:
+        restaurant.headerSubtitleColor ||
+        restaurant.header_subtitle_color ||
+        "#57534e",
+    });
     setLogo(restaurant.logo);
     setCover(restaurant.cover);
     setError("");
@@ -222,6 +252,117 @@ export function IdentityPage() {
             <p className="admin-help">
               O endereço é preservado para manter seus QR Codes e tags NFC.
             </p>
+          </section>
+          <section className="admin-card">
+            <h2>Paleta de Cores</h2>
+            <p className="admin-help" style={{ marginTop: 0, marginBottom: "16px" }}>
+              Personalize a paleta visual do seu estabelecimento e a identidade do cabeçalho.
+            </p>
+            <div className="admin-grid-2">
+              <label>
+                Cor Primária da Marca
+                <span style={{ display: "block", fontSize: "11px", opacity: 0.8, marginBottom: "4px" }}>
+                  Usada em botões e destaques
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input
+                    type="color"
+                    aria-label="Selecionar cor primária da marca"
+                    value={draft.brandPrimaryColor || draft.theme.primary || "#ea580c"}
+                    onChange={(e) => {
+                      const col = e.target.value;
+                      setDraft((d) => ({
+                        ...d,
+                        brandPrimaryColor: col,
+                        theme: { ...d.theme, primary: col },
+                      }));
+                      setNotice("");
+                    }}
+                    style={{ width: "42px", height: "42px", padding: 0, border: "none", borderRadius: "8px", cursor: "pointer" }}
+                  />
+                  <input
+                    aria-label="Código HEX da cor primária da marca"
+                    maxLength={7}
+                    pattern="#[0-9a-fA-F]{6}"
+                    value={draft.brandPrimaryColor || draft.theme.primary || "#ea580c"}
+                    onChange={(e) => {
+                      const col = e.target.value;
+                      setDraft((d) => ({
+                        ...d,
+                        brandPrimaryColor: col,
+                        theme: { ...d.theme, primary: col },
+                      }));
+                      setNotice("");
+                    }}
+                    style={{ textTransform: "uppercase", fontFamily: "monospace" }}
+                  />
+                </div>
+              </label>
+
+              <label>
+                Cor do Nome do Restaurante
+                <span style={{ display: "block", fontSize: "11px", opacity: 0.8, marginBottom: "4px" }}>
+                  Texto principal do cabeçalho
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input
+                    type="color"
+                    aria-label="Selecionar cor do nome do restaurante"
+                    value={draft.headerNameColor || "#1c1917"}
+                    onChange={(e) => {
+                      const col = e.target.value;
+                      setDraft((d) => ({ ...d, headerNameColor: col }));
+                      setNotice("");
+                    }}
+                    style={{ width: "42px", height: "42px", padding: 0, border: "none", borderRadius: "8px", cursor: "pointer" }}
+                  />
+                  <input
+                    aria-label="Código HEX da cor do nome do restaurante"
+                    maxLength={7}
+                    pattern="#[0-9a-fA-F]{6}"
+                    value={draft.headerNameColor || "#1c1917"}
+                    onChange={(e) => {
+                      const col = e.target.value;
+                      setDraft((d) => ({ ...d, headerNameColor: col }));
+                      setNotice("");
+                    }}
+                    style={{ textTransform: "uppercase", fontFamily: "monospace" }}
+                  />
+                </div>
+              </label>
+
+              <label>
+                Cor do Complemento
+                <span style={{ display: "block", fontSize: "11px", opacity: 0.8, marginBottom: "4px" }}>
+                  Texto secundário do cabeçalho
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input
+                    type="color"
+                    aria-label="Selecionar cor do complemento"
+                    value={draft.headerSubtitleColor || "#57534e"}
+                    onChange={(e) => {
+                      const col = e.target.value;
+                      setDraft((d) => ({ ...d, headerSubtitleColor: col }));
+                      setNotice("");
+                    }}
+                    style={{ width: "42px", height: "42px", padding: 0, border: "none", borderRadius: "8px", cursor: "pointer" }}
+                  />
+                  <input
+                    aria-label="Código HEX da cor do complemento"
+                    maxLength={7}
+                    pattern="#[0-9a-fA-F]{6}"
+                    value={draft.headerSubtitleColor || "#57534e"}
+                    onChange={(e) => {
+                      const col = e.target.value;
+                      setDraft((d) => ({ ...d, headerSubtitleColor: col }));
+                      setNotice("");
+                    }}
+                    style={{ textTransform: "uppercase", fontFamily: "monospace" }}
+                  />
+                </div>
+              </label>
+            </div>
           </section>
           <section className="admin-card">
             <h2>Logo e capa</h2>
@@ -432,21 +573,51 @@ export function IdentityPage() {
           <h2>Prévia do cardápio</h2>
           <div
             className="preview-phone"
+            data-theme="light"
             style={{
-              background: draft.theme.background,
-              color: draft.theme.text,
+              background: draft.theme.background || "#ffffff",
+              color: draft.theme.text || "#1c1917",
+              colorScheme: "light",
             }}
           >
-            <div className="preview-heading">
+            <div className="preview-heading" style={{ color: "#1c1917" }}>
               {preview(logo) ? (
                 <img src={preview(logo)} alt="Logo na prévia" />
               ) : (
                 <div className="wordmark">
-                  {draft.name}
-                  <span>{draft.subtitle}</span>
+                  <span
+                    style={{
+                      color: draft.headerNameColor || "#1c1917",
+                      display: "block",
+                      fontSize: "20px",
+                      fontWeight: 800,
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    {draft.name}
+                  </span>
+                  <span
+                    style={{
+                      color: draft.headerSubtitleColor || "#57534e",
+                      display: "block",
+                      fontSize: "11px",
+                      fontWeight: 500,
+                      marginTop: "2px",
+                    }}
+                  >
+                    {draft.subtitle}
+                  </span>
                 </div>
               )}
-              <span className="badge">Mesa 07</span>
+              <span
+                className="badge"
+                style={{
+                  backgroundColor: draft.brandPrimaryColor || draft.theme.primary || "#ea580c",
+                  color: "#ffffff",
+                }}
+              >
+                Mesa 07
+              </span>
             </div>
             {preview(cover) && (
               <img
@@ -455,18 +626,30 @@ export function IdentityPage() {
                 alt="Capa na prévia"
               />
             )}
-            <div className="preview-body">
+            <div className="preview-body" style={{ color: draft.theme.text || "#1c1917" }}>
               <div className="preview-tabs">
                 <span
-                  style={{ background: draft.theme.primary, color: "white" }}
+                  style={{
+                    background: draft.brandPrimaryColor || draft.theme.primary || "#ea580c",
+                    color: "#ffffff",
+                  }}
                 >
                   Cardápio
                 </span>
-                <span>Explorar</span>
+                <span style={{ color: "#57534e" }}>Explorar</span>
               </div>
-              <div className="preview-search">Buscar prato ou bebida</div>
-              <p className="text-sm">Todos · Pratos · Bebidas</p>
-              <h3>Destaque da casa</h3>
+              <div
+                className="preview-search"
+                style={{
+                  color: "#78716c",
+                  backgroundColor: "#f5f5f4",
+                  borderColor: "#e7e5e4",
+                }}
+              >
+                Buscar prato ou bebida
+              </div>
+              <p className="text-sm" style={{ color: "#78716c" }}>Todos · Pratos · Bebidas</p>
+              <h3 style={{ color: draft.theme.text || "#1c1917" }}>Destaque da casa</h3>
               {featuredCover && (
                 <img
                   className="preview-product"
@@ -474,9 +657,11 @@ export function IdentityPage() {
                   alt={featuredCover.alt}
                 />
               )}
-              <strong>{featured?.name || "Seu próximo destaque"}</strong>
+              <strong style={{ color: draft.theme.text || "#1c1917", display: "block" }}>
+                {featured?.name || "Seu próximo destaque"}
+              </strong>
               {featured && (
-                <p style={{ color: draft.theme.primary }}>
+                <p style={{ color: draft.brandPrimaryColor || draft.theme.primary || "#ea580c", fontWeight: 700 }}>
                   {new Intl.NumberFormat("pt-BR", {
                     style: "currency",
                     currency: "BRL",
@@ -485,7 +670,10 @@ export function IdentityPage() {
               )}
               <div
                 className="preview-call"
-                style={{ background: draft.theme.primary }}
+                style={{
+                  background: draft.brandPrimaryColor || draft.theme.primary || "#ea580c",
+                  color: "#ffffff",
+                }}
               >
                 Chamar garçom
               </div>
