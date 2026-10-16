@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 export interface RestaurantAlert {
   id: string;
   restaurant_id: string;
-  type: 'low_stock' | 'system';
+  type: 'low_stock' | 'system' | 'call_waiter' | 'close_table_request' | 'dish_ready';
   title: string;
   message: string;
   is_read: boolean;
@@ -66,7 +66,8 @@ export async function markAllAlertsAsRead(restaurantId: string): Promise<void> {
 
 export function subscribeToAlerts(
   restaurantId: string,
-  onUpdate: () => void
+  onUpdate: () => void,
+  onNewAlert?: (alert: RestaurantAlert) => void
 ): () => void {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const triggerDebounced = () => {
@@ -84,7 +85,15 @@ export function subscribeToAlerts(
         table: 'restaurant_alerts',
         filter: `restaurant_id=eq.${restaurantId}`,
       },
-      triggerDebounced
+      (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new) {
+          const newAlert = payload.new as RestaurantAlert;
+          if (!newAlert.is_read && onNewAlert) {
+            onNewAlert(newAlert);
+          }
+        }
+        triggerDebounced();
+      }
     )
     .subscribe();
 

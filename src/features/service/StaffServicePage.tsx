@@ -19,6 +19,43 @@ import {
     dismissTableServiceRequests,
 } from './serviceRequests';
 import { WaiterReadyOrdersAlert } from './WaiterReadyOrdersAlert';
+import {
+  subscribeToAlerts,
+  type RestaurantAlert,
+} from '../alerts/alertService';
+import {
+  playWaiterCallSound,
+  playDishReadySound,
+  playLowStockSound,
+} from '../../lib/soundAlerts';
+import { SoundSettingsControl } from '../alerts/SoundSettingsControl';
+
+function getStaffAlertMeta(alert: RestaurantAlert, restaurantSlug: string) {
+  let color = '#2563eb';
+  let badgeLabel = 'Chamado de Mesa';
+  let actionLabel = 'Atender no Salão';
+
+  if (alert.type === 'dish_ready') {
+    color = '#16a34a';
+    badgeLabel = 'Prato Pronto (Cozinha)';
+    actionLabel = 'Buscar no Balcão';
+  } else if (alert.type === 'close_table_request') {
+    color = '#d97706';
+    badgeLabel = 'Pediu a Conta';
+    actionLabel = 'Fechar Conta';
+  } else if (alert.type === 'low_stock') {
+    color = '#ea580c';
+    badgeLabel = 'Estoque Crítico';
+    actionLabel = 'Ver Estoque';
+  }
+
+  const targetLink =
+    alert.type === 'low_stock'
+      ? `/${restaurantSlug}/admin/catalogo`
+      : `/${restaurantSlug}/equipe`;
+
+  return { color, badgeLabel, actionLabel, targetLink };
+}
 
 export function StaffServicePage() {
     const { restaurantSlug } = useParams();
@@ -70,6 +107,44 @@ function StaffSalonManager({
     const handleOpenTabsCountChange = useCallback((count: number) => {
         setOpenTabsCount(count);
     }, []);
+
+    // Notificações e Toasts Flutuantes em Tempo Real para a Equipe
+    const [toasts, setToasts] = useState<RestaurantAlert[]>([]);
+
+    const removeToast = (id: string) => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+    };
+
+    useEffect(() => {
+        if (!restaurantId) return;
+
+        const unsubscribe = subscribeToAlerts(
+            restaurantId,
+            () => {
+                setRefresh((c) => c + 1);
+            },
+            (newAlert) => {
+                // Tocar áudio estridente e vibrar conforme preset configurado
+                if (newAlert.type === 'call_waiter' || newAlert.type === 'close_table_request') {
+                    playWaiterCallSound();
+                } else if (newAlert.type === 'dish_ready') {
+                    playDishReadySound();
+                } else {
+                    playLowStockSound();
+                }
+
+                // Exibir Toast flutuante com auto-dismiss em 6 segundos
+                setToasts((prev) => [newAlert, ...prev.filter((t) => t.id !== newAlert.id)].slice(0, 4));
+                setTimeout(() => {
+                    setToasts((prev) => prev.filter((t) => t.id !== newAlert.id));
+                }, 6000);
+            }
+        );
+
+        return () => {
+            unsubscribe();
+        };
+    }, [restaurantId]);
 
     // Estado da operação de assumir/encerrar mesa
     const [busyAction, setBusyAction] = useState(false);
@@ -373,16 +448,19 @@ function StaffSalonManager({
                 TOPO: MESAS NO SALÃO + CARROSSEL HORIZONTAL
                ========================================================= */}
             <div className="staff-salon-container border-t-0 pt-0 mt-0">
-                <div className="staff-salon-header-row">
+                <div className="staff-salon-header-row flex items-center justify-between flex-wrap gap-2">
                     <div>
                         <h2 className="staff-salon-title m-0">MESAS NO SALÃO</h2>
                         <span className="staff-salon-subtitle">Selecione para alternar</span>
                     </div>
-                    {loading && (
-                        <span className="text-xs text-[var(--brand)] animate-pulse">
-                            Carregando…
-                        </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {loading && (
+                            <span className="text-xs text-[var(--brand)] animate-pulse">
+                                Carregando…
+                            </span>
+                        )}
+                        <SoundSettingsControl showLabels />
+                    </div>
                 </div>
 
                 {/* Barra de Busca de Mesa */}
@@ -683,6 +761,155 @@ function StaffSalonManager({
                     }}
                 />
             </div>
+
+            {/* =========================================================
+                TOASTS FLUTUANTES EM TEMPO REAL PARA GARÇOM / EQUIPE
+               ========================================================= */}
+            {toasts.length > 0 && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: '16px',
+                        right: '16px',
+                        zIndex: 99999,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        maxWidth: '380px',
+                        width: 'calc(100vw - 32px)',
+                        pointerEvents: 'none',
+                    }}
+                    aria-live="polite"
+                >
+                    {toasts.map((toast) => {
+                        const meta = getStaffAlertMeta(toast, restaurantSlug);
+
+                        return (
+                            <div
+                                key={toast.id}
+                                style={{
+                                    pointerEvents: 'auto',
+                                    backgroundColor: 'var(--color-bg-panel, #ffffff)',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--color-border, #e5e7eb)',
+                                    borderLeft: `4px solid ${meta.color}`,
+                                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                                    padding: '12px 14px',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '12px',
+                                }}
+                            >
+                                <div style={{ color: meta.color, flexShrink: 0, marginTop: '2px' }}>
+                                    {toast.type === 'dish_ready' ? (
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                            <polyline points="22 4 12 14.01 9 11.01" />
+                                        </svg>
+                                    ) : toast.type === 'close_table_request' ? (
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                                            <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+                                            <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
+                                            <path d="M12 6v12" />
+                                        </svg>
+                                    ) : (
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                                        </svg>
+                                    )}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                                        <span
+                                            style={{
+                                                fontSize: '10px',
+                                                fontWeight: 700,
+                                                textTransform: 'uppercase',
+                                                color: meta.color,
+                                                letterSpacing: '0.04em',
+                                            }}
+                                        >
+                                            {meta.badgeLabel}
+                                        </span>
+                                    </div>
+                                    <p
+                                        style={{
+                                            margin: 0,
+                                            fontSize: '13px',
+                                            fontWeight: 600,
+                                            color: 'var(--color-text-main, #111827)',
+                                        }}
+                                    >
+                                        {toast.title}
+                                    </p>
+                                    <p
+                                        style={{
+                                            margin: '2px 0 6px',
+                                            fontSize: '12px',
+                                            color: 'var(--color-text-muted, #4b5563)',
+                                            lineHeight: 1.4,
+                                        }}
+                                    >
+                                        {toast.message}
+                                    </p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Link
+                                            to={meta.targetLink}
+                                            onClick={() => {
+                                                removeToast(toast.id);
+                                                const match = toast.title.match(/Mesa\s+(\d+)/i);
+                                                if (match && match[1]) {
+                                                    setSelectedTableNumber(parseInt(match[1], 10));
+                                                }
+                                            }}
+                                            style={{
+                                                fontSize: '11px',
+                                                fontWeight: 600,
+                                                color: meta.color,
+                                                textDecoration: 'none',
+                                            }}
+                                            className="hover:underline"
+                                        >
+                                            {meta.actionLabel} →
+                                        </Link>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => removeToast(toast.id)}
+                                    aria-label="Fechar notificação"
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        padding: '2px',
+                                        color: 'var(--color-text-muted, #9ca3af)',
+                                        borderRadius: '4px',
+                                        flexShrink: 0,
+                                    }}
+                                    className="hover:text-stone-700 dark:hover:text-stone-300"
+                                >
+                                    <svg
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden="true"
+                                    >
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </section>
     );
 }

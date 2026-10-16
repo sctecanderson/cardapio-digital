@@ -9,13 +9,149 @@ import {
   type RestaurantAlert,
 } from '../alerts/alertService';
 import { type RestaurantIdentity } from '../restaurants/RestaurantProvider';
+import {
+  playWaiterCallSound,
+  playDishReadySound,
+  playLowStockSound,
+} from '../../lib/soundAlerts';
+import { SoundSettingsControl } from '../alerts/SoundSettingsControl';
 
 interface AdminTopbarProps {
   restaurant: RestaurantIdentity;
 }
 
+function getAlertMeta(type: RestaurantAlert['type'], slug: string) {
+  switch (type) {
+    case 'dish_ready':
+      return {
+        color: '#16a34a',
+        targetLink: `/${slug}/admin/mesas`,
+        linkLabel: 'Ver mesas',
+      };
+    case 'call_waiter':
+      return {
+        color: '#2563eb',
+        targetLink: `/${slug}/admin/mesas`,
+        linkLabel: 'Ver mesas',
+      };
+    case 'close_table_request':
+      return {
+        color: '#d97706',
+        targetLink: `/${slug}/admin/mesas`,
+        linkLabel: 'Ver mesas',
+      };
+    case 'low_stock':
+      return {
+        color: '#ea580c',
+        targetLink: `/${slug}/admin/catalogo`,
+        linkLabel: 'Ver catálogo',
+      };
+    default:
+      return {
+        color: '#6b7280',
+        targetLink: `/${slug}/admin`,
+        linkLabel: 'Ver detalhes',
+      };
+  }
+}
+
+function renderAlertIcon(type: RestaurantAlert['type'], size = 18) {
+  if (type === 'dish_ready') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+        <polyline points="22 4 12 14.01 9 11.01" />
+      </svg>
+    );
+  }
+  if (type === 'call_waiter') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    );
+  }
+  if (type === 'close_table_request') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+        <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
+        <path d="M12 6v12" />
+      </svg>
+    );
+  }
+  if (type === 'low_stock') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+  );
+}
+
 export function AdminTopbar({ restaurant }: AdminTopbarProps) {
   const [alerts, setAlerts] = useState<RestaurantAlert[]>([]);
+  const [toasts, setToasts] = useState<RestaurantAlert[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
@@ -32,13 +168,38 @@ export function AdminTopbar({ restaurant }: AdminTopbarProps) {
 
   useEffect(() => {
     void loadAlerts();
-    const unsubscribe = subscribeToAlerts(restaurant.id, () => {
-      void loadAlerts();
-    });
+    const unsubscribe = subscribeToAlerts(
+      restaurant.id,
+      () => {
+        void loadAlerts();
+      },
+      (newAlert) => {
+        // Tocar áudio de acordo com a natureza do alerta
+        if (newAlert.type === 'dish_ready') {
+          playDishReadySound();
+        } else if (newAlert.type === 'call_waiter' || newAlert.type === 'close_table_request') {
+          playWaiterCallSound();
+        } else if (newAlert.type === 'low_stock') {
+          playLowStockSound();
+        } else {
+          playLowStockSound();
+        }
+
+        // Exibir Toast flutuante com auto-dismiss em 6 segundos
+        setToasts((prev) => [newAlert, ...prev.filter((t) => t.id !== newAlert.id)].slice(0, 4));
+        setTimeout(() => {
+          setToasts((prev) => prev.filter((t) => t.id !== newAlert.id));
+        }, 6000);
+      }
+    );
     return () => {
       unsubscribe();
     };
   }, [restaurant.id]);
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -86,6 +247,9 @@ export function AdminTopbar({ restaurant }: AdminTopbarProps) {
       <span>Administração do restaurante</span>
 
       <div className="admin-topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* Controle de Áudio e Toques Personalizáveis */}
+        <SoundSettingsControl />
+
         {/* Central de Notificações / Alertas */}
         <div ref={dropdownRef} style={{ position: 'relative' }}>
           <button
@@ -262,43 +426,11 @@ export function AdminTopbar({ restaurant }: AdminTopbarProps) {
                       <div
                         style={{
                           marginTop: '2px',
-                          color: alert.type === 'low_stock' ? '#d97706' : '#2563eb',
+                          color: getAlertMeta(alert.type, restaurant.slug).color,
                           flexShrink: 0,
                         }}
                       >
-                        {alert.type === 'low_stock' ? (
-                          <svg
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.75"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                            <line x1="12" y1="9" x2="12" y2="13" />
-                            <line x1="12" y1="17" x2="12.01" y2="17" />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.75"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="16" x2="12" y2="12" />
-                            <line x1="12" y1="8" x2="12.01" y2="8" />
-                          </svg>
-                        )}
+                        {renderAlertIcon(alert.type)}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--color-text-main, #111827)' }}>
@@ -405,6 +537,118 @@ export function AdminTopbar({ restaurant }: AdminTopbarProps) {
           Administrador
         </span>
       </div>
+
+      {/* Toasts Flutuantes de Alertas em Tempo Real (6 segundos auto-dismiss) */}
+      {toasts.length > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '16px',
+            right: '16px',
+            zIndex: 99999,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            maxWidth: '380px',
+            width: 'calc(100vw - 32px)',
+            pointerEvents: 'none',
+          }}
+          aria-live="polite"
+        >
+          {toasts.map((toast) => {
+            const meta = getAlertMeta(toast.type, restaurant.slug);
+
+            return (
+              <div
+                key={toast.id}
+                style={{
+                  pointerEvents: 'auto',
+                  backgroundColor: 'var(--color-bg-panel, #ffffff)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--color-border, #e5e7eb)',
+                  borderLeft: `4px solid ${meta.color}`,
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                }}
+              >
+                <div style={{ color: meta.color, flexShrink: 0, marginTop: '2px' }}>
+                  {renderAlertIcon(toast.type, 20)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: 'var(--color-text-main, #111827)',
+                    }}
+                  >
+                    {toast.title}
+                  </p>
+                  <p
+                    style={{
+                      margin: '2px 0 6px',
+                      fontSize: '12px',
+                      color: 'var(--color-text-muted, #4b5563)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {toast.message}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Link
+                      to={meta.targetLink}
+                      onClick={() => removeToast(toast.id)}
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: meta.color,
+                        textDecoration: 'none',
+                      }}
+                      className="hover:underline"
+                    >
+                      {meta.linkLabel} →
+                    </Link>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeToast(toast.id)}
+                  aria-label="Fechar notificação"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    color: 'var(--color-text-muted, #9ca3af)',
+                    borderRadius: '4px',
+                    flexShrink: 0,
+                  }}
+                  className="hover:text-stone-700 dark:hover:text-stone-300"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
