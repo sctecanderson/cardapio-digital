@@ -34,6 +34,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignora falhas de gravação em storage restrito
     }
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+    }
   }, [theme]);
 
   const toggleTheme = () => {

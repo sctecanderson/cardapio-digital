@@ -347,48 +347,48 @@ function SessionPanel({
     }
 
     return (
-        <section className="overflow-hidden rounded-2xl border border-black/10 bg-white">
-            <div className="flex items-center justify-between gap-3 border-b border-black/5 px-4 py-3">
-                <h2 className="font-semibold">Seu atendimento</h2>
+        <section className="overflow-hidden rounded-2xl border border-black/10 bg-white text-stone-900 shadow-sm dark:border-white/10 dark:bg-stone-900 dark:text-stone-100">
+            <div className="flex items-center justify-between gap-3 border-b border-black/5 dark:border-white/10 px-4 py-3">
+                <h2 className="font-semibold text-stone-900 dark:text-stone-100">Seu atendimento</h2>
 
-                <span className="rounded-full bg-[var(--page)] px-3 py-1 text-sm font-medium">
+                <span className="rounded-full bg-[var(--page)] px-3 py-1 text-sm font-medium text-stone-700 dark:text-stone-300">
                     Mesa {String(tableNumber).padStart(2, '0')}
                 </span>
             </div>
 
             <div className="space-y-4 p-4">
                 {checking ? (
-                    <p role="status" className="text-sm opacity-75">
+                    <p role="status" className="text-sm opacity-75 text-stone-600 dark:text-stone-300">
                         Recuperando sua sessão…
                     </p>
                 ) : confirmed ? (
                     <div
                         role="status"
-                        className="rounded-xl bg-green-50 p-4 text-sm text-green-900"
+                        className="rounded-xl bg-green-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 p-4 text-sm text-green-900 dark:text-emerald-200"
                     >
                         Sua presença foi confirmada pela equipe.
                     </div>
                 ) : (
                     <>
-                        <p className="text-sm opacity-75">
+                        <p className="text-sm opacity-75 text-stone-600 dark:text-stone-300">
                             Mostre o código ao funcionário para confirmar sua
                             presença nesta mesa.
                         </p>
 
                         {code && (
                             validCode ? (
-                                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[var(--page)] p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[var(--page)] p-4 border border-black/5 dark:border-white/10">
                                     <div>
-                                        <p className="text-xs font-medium opacity-75">
+                                        <p className="text-xs font-medium opacity-75 text-stone-600 dark:text-stone-300">
                                             Código de confirmação
                                         </p>
 
-                                        <p className="mt-1 font-mono text-3xl font-semibold tracking-widest">
+                                        <p className="mt-1 font-mono text-3xl font-semibold tracking-widest text-stone-900 dark:text-stone-100">
                                             {code.code}
                                         </p>
                                     </div>
 
-                                    <div className="rounded-xl border border-black/10 bg-white px-3 py-2 text-center">
+                                    <div className="rounded-xl border border-black/10 bg-white text-stone-900 shadow-xs dark:border-white/10 dark:bg-stone-800 dark:text-stone-100 px-3 py-2 text-center">
                                         <p className="text-xs opacity-75">
                                             Expira em
                                         </p>

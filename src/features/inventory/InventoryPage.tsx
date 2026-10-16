@@ -451,6 +451,7 @@ export function InventoryPage() {
               border: '1px solid var(--color-border, #d1d5db)',
               fontSize: '13px',
               backgroundColor: 'var(--color-bg-panel, #ffffff)',
+              color: 'var(--color-text-main, #1c1917)',
             }}
           />
           <svg
@@ -532,6 +533,7 @@ export function InventoryPage() {
         <div
           style={{
             backgroundColor: 'var(--color-bg-panel, #ffffff)',
+            color: 'var(--color-text-main, #1c1917)',
             border: '1px solid var(--color-border, #e5e7eb)',
             borderRadius: '10px',
             overflow: 'hidden',
@@ -798,6 +800,7 @@ export function InventoryPage() {
           <div
             style={{
               backgroundColor: 'var(--color-bg-panel, #ffffff)',
+              color: 'var(--color-text-main, #1c1917)',
               borderRadius: '12px',
               width: '100%',
               maxWidth: '480px',
@@ -868,6 +871,8 @@ export function InventoryPage() {
                     borderRadius: '6px',
                     border: '1px solid var(--color-border, #d1d5db)',
                     fontSize: '14px',
+                    backgroundColor: 'var(--color-bg-panel, #ffffff)',
+                    color: 'var(--color-text-main, #1c1917)',
                   }}
                 />
               </div>
@@ -888,6 +893,8 @@ export function InventoryPage() {
                       borderRadius: '6px',
                       border: '1px solid var(--color-border, #d1d5db)',
                       fontSize: '14px',
+                      backgroundColor: 'var(--color-bg-panel, #ffffff)',
+                      color: 'var(--color-text-main, #1c1917)',
                     }}
                   />
                 </div>
@@ -905,6 +912,8 @@ export function InventoryPage() {
                       borderRadius: '6px',
                       border: '1px solid var(--color-border, #d1d5db)',
                       fontSize: '14px',
+                      backgroundColor: 'var(--color-bg-panel, #ffffff)',
+                      color: 'var(--color-text-main, #1c1917)',
                     }}
                   >
                     {Object.entries(unitLabels).map(([key, label]) => (
@@ -935,6 +944,8 @@ export function InventoryPage() {
                       borderRadius: '6px',
                       border: '1px solid var(--color-border, #d1d5db)',
                       fontSize: '14px',
+                      backgroundColor: 'var(--color-bg-panel, #ffffff)',
+                      color: 'var(--color-text-main, #1c1917)',
                     }}
                   />
                 </div>
@@ -957,6 +968,8 @@ export function InventoryPage() {
                       borderRadius: '6px',
                       border: '1px solid var(--color-border, #d1d5db)',
                       fontSize: '14px',
+                      backgroundColor: 'var(--color-bg-panel, #ffffff)',
+                      color: 'var(--color-text-main, #1c1917)',
                     }}
                   />
                 </div>

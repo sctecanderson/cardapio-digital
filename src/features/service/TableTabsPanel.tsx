@@ -411,18 +411,18 @@ function TableTabsContent({
                       </div>
 
                       {confirmingClose ? (
-                        <div className="mt-3 rounded-xl bg-white p-3 border border-amber-200">
-                          <p className="text-xs font-semibold text-amber-900">
+                        <div className="mt-3 rounded-xl bg-white p-3 border border-amber-200 dark:bg-stone-900 dark:border-amber-900/60 shadow-xs">
+                          <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
                             Encerrar a comanda “{tab.label}”?
                           </p>
 
                           {restaurantFeePercent > 0 && (
                             <div className="mt-2 text-xs">
-                              <span className="text-gray-700 font-medium block mb-1">
+                              <span className="text-gray-700 dark:text-stone-300 font-medium block mb-1">
                                 Taxa de serviço ({restaurantFeePercent}%):
                               </span>
                               <div className="flex gap-4">
-                                <label className="flex items-center gap-1.5 cursor-pointer text-gray-800">
+                                <label className="flex items-center gap-1.5 cursor-pointer text-gray-800 dark:text-stone-200">
                                   <input
                                     type="radio"
                                     name={`fee-${tab.id}`}
@@ -432,7 +432,7 @@ function TableTabsContent({
                                   />
                                   <span>Aceita (incluir {restaurantFeePercent}%)</span>
                                 </label>
-                                <label className="flex items-center gap-1.5 cursor-pointer text-gray-800">
+                                <label className="flex items-center gap-1.5 cursor-pointer text-gray-800 dark:text-stone-200">
                                   <input
                                     type="radio"
                                     name={`fee-${tab.id}`}

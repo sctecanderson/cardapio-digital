@@ -444,27 +444,27 @@ function WaiterCallContent({
     }
 
     return (
-        <section className="overflow-hidden rounded-2xl border border-black/10 bg-white">
-            <div className="flex items-center justify-between gap-3 border-b border-black/5 px-4 py-3">
-                <h2 className="font-semibold">Precisa de ajuda?</h2>
+        <section className="overflow-hidden rounded-2xl border border-black/10 bg-white text-stone-900 shadow-sm dark:border-white/10 dark:bg-stone-900 dark:text-stone-100">
+            <div className="flex items-center justify-between gap-3 border-b border-black/5 dark:border-white/10 px-4 py-3">
+                <h2 className="font-semibold text-stone-900 dark:text-stone-100">Precisa de ajuda?</h2>
 
-                <span className="rounded-full bg-[var(--page)] px-3 py-1 text-sm font-medium">
+                <span className="rounded-full bg-[var(--page)] px-3 py-1 text-sm font-medium text-stone-700 dark:text-stone-300">
                     Mesa {String(tableNumber).padStart(2, '0')}
                 </span>
             </div>
 
             <div className="space-y-4 p-4">
                 {checking ? (
-                    <p role="status" className="text-sm opacity-75">
+                    <p role="status" className="text-sm opacity-75 text-stone-600 dark:text-stone-300">
                         Verificando solicitações…
                     </p>
                 ) : pending ? (
-                    <div className="rounded-xl bg-amber-50 p-4 text-amber-900">
-                        <p role="status" className="font-semibold">
+                    <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 p-4 text-amber-900 dark:text-amber-200">
+                        <p role="status" className="font-semibold text-amber-900 dark:text-amber-200">
                             Aguardando atendimento
                         </p>
 
-                        <p className="mt-1 text-sm">
+                        <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
                             Sua solicitação está na fila da equipe.
                         </p>
 
@@ -572,7 +572,7 @@ function WaiterCallContent({
                                     setError('');
                                 }}
                                 disabled={busy}
-                                className="min-h-12 rounded-xl border border-black/20 bg-white px-4 font-medium disabled:opacity-50"
+                                className="min-h-12 rounded-xl border border-black/20 bg-white text-stone-800 hover:bg-stone-50 dark:border-white/20 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700 px-4 font-medium disabled:opacity-50 transition-colors"
                             >
                                 Cancelar
                             </button>

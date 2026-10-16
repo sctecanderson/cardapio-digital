@@ -580,7 +580,7 @@ export function WaiterRequestsPanel({
                                                 type="button"
                                                 onClick={() => void handleComplete(request)}
                                                 disabled={busyId !== null}
-                                                className="mt-3 min-h-10 w-full rounded-xl border border-slate-300 bg-white hover:bg-slate-100 px-3 text-xs font-semibold text-slate-800 disabled:opacity-50 transition-colors"
+                                                className="mt-3 min-h-10 w-full rounded-xl border border-slate-300 dark:border-white/15 bg-white text-slate-800 hover:bg-slate-100 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700 px-3 text-xs font-semibold disabled:opacity-50 transition-colors"
                                             >
                                                 {busyId === request.id
                                                     ? 'Encerrando…'

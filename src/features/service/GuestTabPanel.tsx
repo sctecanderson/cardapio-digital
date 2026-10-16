@@ -116,27 +116,27 @@ function GuestTabContent({ restaurantSlug, tableNumber }: {
   if (!error && (!state || state.status === 'hidden')) return null;
 
   return (
-    <section aria-labelledby="guest-tab-title" className="overflow-hidden rounded-2xl border border-black/10 bg-white">
-      <div className="flex items-center justify-between gap-3 border-b border-black/5 px-4 py-3">
-        <h2 id="guest-tab-title" className="font-semibold">Minha comanda</h2>
+    <section aria-labelledby="guest-tab-title" className="overflow-hidden rounded-2xl border border-black/10 bg-white text-stone-900 shadow-sm dark:border-white/10 dark:bg-stone-900 dark:text-stone-100">
+      <div className="flex items-center justify-between gap-3 border-b border-black/5 dark:border-white/10 px-4 py-3">
+        <h2 id="guest-tab-title" className="font-semibold text-stone-900 dark:text-stone-100">Minha comanda</h2>
         <button type="button" disabled={checking} onClick={refresh}
           className="min-h-11 px-3 text-sm font-medium text-[var(--brand)] disabled:opacity-50">
           {checking ? 'Atualizando…' : 'Atualizar'}
         </button>
       </div>
       <div className="space-y-4 p-4">
-        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-        {state?.status === 'waiting' && <p className="text-sm opacity-75">
+        {error && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{error}</p>}
+        {state?.status === 'waiting' && <p className="text-sm opacity-75 text-stone-600 dark:text-stone-300">
           Sua presença está confirmada. A equipe ainda precisa vincular você a uma comanda.
         </p>}
         {state?.status === 'ready' && <>
           <div className="flex items-start justify-between gap-3">
-            <h3 className="break-words text-lg font-semibold">{state.tab.label}</h3>
-            <span className="shrink-0 rounded-full bg-[var(--page)] px-3 py-1 text-xs">
+            <h3 className="break-words text-lg font-semibold text-stone-900 dark:text-stone-100">{state.tab.label}</h3>
+            <span className="shrink-0 rounded-full bg-[var(--page)] px-3 py-1 text-xs text-stone-700 dark:text-stone-300">
               {state.tab.status === 'closed' ? 'Encerrada' : 'Aberta'}
             </span>
           </div>
-          {state.items.length === 0 ? <p className="text-sm opacity-75">Ainda não há consumo registrado nesta comanda.</p>
+          {state.items.length === 0 ? <p className="text-sm opacity-75 text-stone-600 dark:text-stone-300">Ainda não há consumo registrado nesta comanda.</p>
             : <ul className="space-y-3">
               {groupTabConsumptionItems(state.items).map((item) => {
                 const isCancelled = item.isCancelled;
@@ -144,7 +144,7 @@ function GuestTabContent({ restaurantSlug, tableNumber }: {
                   <li
                     key={item.key}
                     className={`rounded-xl p-3 transition-opacity ${
-                      isCancelled ? 'opacity-60 bg-gray-50' : 'bg-[var(--page)]'
+                      isCancelled ? 'opacity-60 bg-gray-50 dark:bg-stone-800/50' : 'bg-[var(--page)]'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">

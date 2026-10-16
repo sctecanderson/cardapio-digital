@@ -601,7 +601,7 @@ function StaffSalonManager({
                                             type="button"
                                             disabled={busyAction}
                                             onClick={() => setConfirmDismissRequests(false)}
-                                            className="rounded-lg border border-amber-300 bg-white px-3 py-1 font-medium text-amber-900"
+                                            className="rounded-lg border border-amber-300 dark:border-amber-800 bg-white dark:bg-stone-800 px-3 py-1 font-medium text-amber-900 dark:text-amber-200"
                                         >
                                             Cancelar
                                         </button>
@@ -613,8 +613,8 @@ function StaffSalonManager({
 
                     {/* Caso A: Mesa Livre */}
                     {isTableFree && (
-                        <div className="mt-4 rounded-2xl bg-[#fff8ef] p-4 border border-[#e8dac8] text-center">
-                            <p className="text-xs text-[#6d5b4d] font-medium mb-3">
+                        <div className="mt-4 rounded-2xl bg-[#fff8ef] dark:bg-stone-900/60 p-4 border border-[#e8dac8] dark:border-white/10 text-center">
+                            <p className="text-xs text-[#6d5b4d] dark:text-stone-300 font-medium mb-3">
                                 Esta mesa está livre e disponível para atendimento.
                             </p>
                             <button
@@ -630,11 +630,11 @@ function StaffSalonManager({
 
                     {/* Caso B: Mesa em atendimento por outro funcionário */}
                     {isOtherStaffVisit && (
-                        <div className="mt-4 rounded-2xl bg-[#fffbeb] p-4 border border-[#fef3c7] text-center">
-                            <div className="text-amber-800 text-xs font-semibold mb-1">
+                        <div className="mt-4 rounded-2xl bg-[#fffbeb] dark:bg-amber-950/40 p-4 border border-[#fef3c7] dark:border-amber-900/50 text-center">
+                            <div className="text-amber-800 dark:text-amber-300 text-xs font-semibold mb-1">
                                 ⚠️ Mesa ocupada
                             </div>
-                            <p className="text-xs text-amber-700 font-medium">
+                            <p className="text-xs text-amber-700 dark:text-amber-200 font-medium">
                                 Esta mesa já está sendo atendida por outro membro da equipe. Apenas o responsável pode confirmar clientes, administrar comandas ou encerrar o atendimento.
                             </p>
                         </div>
@@ -790,6 +790,7 @@ function StaffSalonManager({
                                 style={{
                                     pointerEvents: 'auto',
                                     backgroundColor: 'var(--color-bg-panel, #ffffff)',
+                                    color: 'var(--color-text-main, #1c1917)',
                                     borderRadius: '12px',
                                     border: '1px solid var(--color-border, #e5e7eb)',
                                     borderLeft: `4px solid ${meta.color}`,

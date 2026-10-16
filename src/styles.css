@@ -5,7 +5,35 @@
     color: #2B1D17;
     background: #FFF8EF;
     font-synthesis: none;
-    line-height: 1.6
+    line-height: 1.6;
+    color-scheme: light;
+    --color-surface: #ffffff;
+    --color-text-main: #1c1917;
+    --color-text-muted: #78716c;
+    --color-bg-panel: #ffffff;
+    --color-bg-subtle: #f9f6f0;
+    --color-border: #ded7cd;
+}
+
+[data-theme="light"] {
+    color-scheme: light;
+    --color-surface: #ffffff;
+    --color-text-main: #1c1917;
+    --color-text-muted: #78716c;
+    --color-bg-panel: #ffffff;
+    --color-bg-subtle: #f9f6f0;
+    --color-border: #ded7cd;
+}
+
+[data-theme="dark"] {
+    color-scheme: dark;
+    --color-surface: #1c1815;
+    --color-text-main: #f7f3ee;
+    --color-text-muted: #d6ccc2;
+    --color-bg-panel: #1c1815;
+    --color-bg-subtle: #2b221d;
+    --color-border: rgba(255, 255, 255, 0.15);
+    --color-border-subtle: rgba(255, 255, 255, 0.1);
 }
 
 * {
@@ -21,8 +49,125 @@ a {
 }
 
 button,
-input {
+input,
+select,
+textarea {
     font: inherit
+}
+
+/* ==========================================================================
+   Bloco 20: Correção Global de Contraste e Form Controls (WCAG AA)
+   ========================================================================== */
+input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]),
+select,
+textarea,
+.admin-input {
+    background-color: var(--color-surface, #ffffff);
+    color: var(--color-text-main, #1c1917);
+}
+
+[data-theme="light"] input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]),
+[data-theme="light"] select,
+[data-theme="light"] textarea,
+[data-theme="light"] .admin-input {
+    background-color: #ffffff;
+    color: #1c1917;
+    color-scheme: light;
+}
+
+[data-theme="dark"] input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]),
+[data-theme="dark"] select,
+[data-theme="dark"] textarea,
+[data-theme="dark"] .admin-input {
+    background-color: #14110f;
+    color: #f7f3ee;
+    color-scheme: dark;
+}
+
+/* Força cores sólidas de alto contraste nos menus dropdown de <option> para evitar texto invisível no Windows/Chrome */
+select option {
+    background-color: #ffffff;
+    color: #1c1917;
+}
+
+[data-theme="dark"] select option {
+    background-color: #1c1815;
+    color: #f7f3ee;
+}
+
+/* Botões Secundários, Ghost, Badges e Estados :disabled (Bloco 20) */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-secondary {
+    background-color: #f5f2eb;
+    color: #2b1d17;
+    border: 1px solid #ded7cd;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: #e9e3d8;
+    color: #1c1917;
+}
+
+.btn-ghost {
+    background-color: transparent;
+    color: #44403c;
+    border: 1px solid transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: #1c1917;
+}
+
+[data-theme="dark"] .btn-secondary {
+    background-color: #241e1a;
+    color: #f7f3ee;
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .btn-secondary:hover:not(:disabled) {
+    background-color: #322b25;
+    color: #ffffff;
+}
+
+[data-theme="dark"] .btn-ghost {
+    background-color: transparent;
+    color: #d6ccc2;
+    border: 1px solid transparent;
+}
+
+[data-theme="dark"] .btn-ghost:hover:not(:disabled) {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.btn:disabled,
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+[data-theme="dark"] .btn:disabled,
+[data-theme="dark"] button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Proteção global de contraste para containers brancos no dark mode */
+[data-theme="dark"] .restaurant section.bg-white,
+[data-theme="dark"] .restaurant article.bg-white,
+[data-theme="dark"] .restaurant .bg-white:not([class*="dark:"]):not(.keep-white) {
+    background-color: #1c1815 !important;
+    color: #f7f3ee !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 a:focus-visible,
@@ -409,7 +554,8 @@ footer a {
     border: 1px solid #ded7cd;
     border-radius: 8px;
     padding: 10px 12px;
-    background: #fff;
+    background: var(--color-surface, #ffffff);
+    color: var(--color-text-main, #1c1917);
     font: inherit;
     margin-top: 6px
 }

@@ -172,6 +172,7 @@ export function SoundSettingsControl({ className = '', showLabels = false }: Sou
             maxWidth: 'calc(100vw - 24px)',
             zIndex: 9999,
             backgroundColor: 'var(--color-bg-panel, #ffffff)',
+            color: 'var(--color-text-main, #1c1917)',
             borderRadius: '16px',
             border: '1px solid var(--color-border, #e5e7eb)',
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',

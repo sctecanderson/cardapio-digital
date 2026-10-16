@@ -227,14 +227,14 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
                 return (
                   <li
                     key={group.key}
-                    className={`rounded-xl border border-[#ded5c8] p-2.5 text-xs transition-opacity ${
-                      isCancelled ? 'opacity-60 bg-[#faf8f5]' : 'bg-white'
+                    className={`rounded-xl border border-[#ded5c8] dark:border-white/10 p-2.5 text-xs transition-opacity ${
+                      isCancelled ? 'opacity-60 bg-[#faf8f5] dark:bg-stone-900/60' : 'bg-white dark:bg-stone-800'
                     }`}
                   >
                     <div className="flex justify-between items-start">
                       <p
                         className={`font-semibold text-[13px] ${
-                          isCancelled ? 'line-through text-gray-500' : 'text-[#2b1d17]'
+                          isCancelled ? 'line-through text-gray-500 dark:text-stone-400' : 'text-[#2b1d17] dark:text-stone-100'
                         }`}
                       >
                         {group.quantity} × {group.productName}
@@ -328,7 +328,7 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
                             disabled={disabled}
                             placeholder="Ex: Cliente desistiu antes do preparo"
                             onChange={(event) => setReason(event.target.value)}
-                            className="min-h-9 w-full rounded-lg border border-black/20 bg-white px-2 text-xs"
+                            className="min-h-9 w-full rounded-lg border border-black/20 bg-white text-stone-900 placeholder:text-stone-400 dark:border-white/20 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
                           />
                           <div className="flex gap-2">
                             <button
@@ -342,7 +342,7 @@ function ConsumptionContent({ restaurantSlug, restaurantId, tab }: Props) {
                               type="button"
                               disabled={busy}
                               onClick={() => { setCancellingId(null); setReason(''); }}
-                              className="min-h-8 rounded-lg border border-black/15 bg-white px-3 text-xs"
+                              className="min-h-8 rounded-lg border border-black/15 bg-white text-stone-800 hover:bg-stone-50 dark:border-white/15 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700 px-3 text-xs transition-colors"
                             >
                               Voltar
                             </button>

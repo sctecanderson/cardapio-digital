@@ -133,14 +133,14 @@ export function WaiterReadyOrdersAlert({
           const isBar = item.preparation_station === 'bar';
           const stationLabel = isBar ? 'Retirar no Bar' : 'Retirar na Cozinha';
           const stationBg = isBar
-            ? 'bg-orange-100 text-orange-900 border-orange-200'
-            : 'bg-blue-100 text-blue-900 border-blue-200';
+            ? 'bg-orange-100 text-orange-900 border-orange-200 dark:bg-orange-950/60 dark:text-orange-200 dark:border-orange-900/60'
+            : 'bg-blue-100 text-blue-900 border-blue-200 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-900/60';
           const timeElapsed = formatStopwatch(item.prep_ready_at, now);
 
           return (
             <li
               key={item.id}
-              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-white p-3.5 shadow-xs"
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-white dark:border-emerald-900/50 dark:bg-stone-900 p-3.5 shadow-xs"
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -150,11 +150,11 @@ export function WaiterReadyOrdersAlert({
                   <span className={`inline-block px-2 py-0.5 text-xs font-semibold rounded-md border ${stationBg}`}>
                     {stationLabel}
                   </span>
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-800 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-900/50">
                     ⏱️ Pronto há {timeElapsed}
                   </span>
                 </div>
-                <p className="text-sm font-bold text-gray-900 m-0">
+                <p className="text-sm font-bold text-gray-900 dark:text-stone-100 m-0">
                   {item.quantity}x {item.product_name}
                 </p>
               </div>

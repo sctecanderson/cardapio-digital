@@ -727,13 +727,13 @@ export function ServiceActionPopup({
 
                                 {confirmCancelBill ? (
                                     <div className="mt-3 p-3 bg-amber-50 rounded-xl text-center">
-                                        <p className="text-xs text-amber-900 font-medium">
+                                        <p className="text-xs text-amber-900 dark:text-amber-200 font-medium">
                                             Atenção: cancelar este pedido afeta todos os clientes vinculados a esta comanda. Deseja cancelar mesmo assim?
                                         </p>
                                         <div className="mt-2 flex gap-2 justify-center">
                                             <button
                                                 type="button"
-                                                className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg font-medium"
+                                                className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
                                                 disabled={billBusy}
                                                 onClick={() => void handleCancelBill()}
                                             >
@@ -741,7 +741,7 @@ export function ServiceActionPopup({
                                             </button>
                                             <button
                                                 type="button"
-                                                className="px-3 py-1.5 text-xs bg-white border border-black/10 rounded-lg"
+                                                className="px-3 py-1.5 text-xs bg-white text-stone-800 border border-black/10 hover:bg-stone-50 dark:bg-stone-800 dark:text-stone-200 dark:border-white/10 dark:hover:bg-stone-700 rounded-lg transition-colors"
                                                 disabled={billBusy}
                                                 onClick={() => setConfirmCancelBill(false)}
                                             >

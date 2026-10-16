@@ -183,23 +183,23 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
   }
 
   return <section aria-label="Solicitação de conta" className="border-t border-black/10 pt-4">
-    {pending && request && tabStatus === 'open' && <div className="rounded-xl bg-amber-50 p-4 text-amber-900">
-      <p role="status" className="font-semibold">Conta solicitada</p>
-      <p className="mt-1 text-sm">Aguardando a equipe para esta comanda.</p>
-      <p role="timer" aria-live="off" aria-label="Tempo aguardando a conta" className="mt-2 font-mono text-lg tabular-nums">
+    {pending && request && tabStatus === 'open' && <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 p-4 text-amber-900 dark:text-amber-200">
+      <p role="status" className="font-semibold text-amber-900 dark:text-amber-200">Conta solicitada</p>
+      <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">Aguardando a equipe para esta comanda.</p>
+      <p role="timer" aria-live="off" aria-label="Tempo aguardando a conta" className="mt-2 font-mono text-lg tabular-nums text-amber-900 dark:text-amber-200">
         {elapsed(request.created_at, now)}
       </p>
 
       {restaurant.serviceFeePercent > 0 && (
-        <p className="mt-2 text-xs font-medium text-amber-950">
+        <p className="mt-2 text-xs font-medium text-amber-950 dark:text-amber-100">
           Preferência de taxa informada:{' '}
           <strong>{request.include_service_fee ? `Com taxa sugerida (${restaurant.serviceFeePercent}%)` : 'Sem taxa'}</strong>
         </p>
       )}
 
       {confirmingCancel ? (
-        <div className="mt-3 p-3 bg-white/80 rounded-lg border border-amber-200">
-          <p className="text-xs text-amber-950 font-medium">
+        <div className="mt-3 p-3 bg-white/90 dark:bg-stone-900/90 rounded-lg border border-amber-200 dark:border-amber-900/50">
+          <p className="text-xs text-amber-950 dark:text-amber-100 font-medium">
             Atenção: cancelar este pedido de conta afeta todos os clientes vinculados a esta comanda. Deseja cancelar mesmo assim?
           </p>
           <div className="mt-2 flex gap-2">
@@ -207,7 +207,7 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
               type="button"
               disabled={busy}
               onClick={() => void handleCancelBill()}
-              className="px-3 py-1.5 text-xs bg-red-600 text-white font-medium rounded-lg disabled:opacity-50"
+              className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
             >
               {busy ? 'Cancelando…' : 'Sim, cancelar conta'}
             </button>
@@ -215,7 +215,7 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
               type="button"
               disabled={busy}
               onClick={() => setConfirmingCancel(false)}
-              className="px-3 py-1.5 text-xs bg-white border border-black/20 rounded-lg"
+              className="px-3 py-1.5 text-xs bg-white text-stone-800 border border-black/20 hover:bg-stone-50 dark:bg-stone-800 dark:text-stone-200 dark:border-white/10 dark:hover:bg-stone-700 rounded-lg transition-colors"
             >
               Voltar
             </button>
@@ -227,29 +227,29 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
             type="button"
             disabled={busy}
             onClick={() => setConfirmingCancel(true)}
-            className="text-xs text-red-700 underline font-medium hover:text-red-900"
+            className="text-xs text-red-700 dark:text-red-400 underline font-medium hover:text-red-900 dark:hover:text-red-300"
           >
             Cancelar pedido de conta
           </button>
         </div>
       )}
     </div>}
-    {request?.status === 'attended' && tabStatus === 'open' && <p role="status" className="text-sm text-green-800">
+    {request?.status === 'attended' && tabStatus === 'open' && <p role="status" className="text-sm text-green-800 dark:text-green-300">
       A equipe marcou sua solicitação como atendida.
     </p>}
     {request?.status === 'cancelled' && tabStatus === 'open' && <p role="status" className="text-sm opacity-75">
       A solicitação anterior foi cancelada.
     </p>}
-    {tabStatus === 'open' && !pending && (confirming ? <div className="rounded-xl bg-[var(--page)] p-4">
-      <p className="font-medium">Pedir a conta da comanda “{tabLabel}”?</p>
-      <p className="mt-1 text-sm opacity-75">A solicitação vale para a comanda inteira.</p>
+    {tabStatus === 'open' && !pending && (confirming ? <div className="rounded-xl bg-[var(--page)] p-4 border border-black/10 dark:border-white/10">
+      <p className="font-medium text-stone-900 dark:text-stone-100">Pedir a conta da comanda “{tabLabel}”?</p>
+      <p className="mt-1 text-sm opacity-75 text-stone-600 dark:text-stone-300">A solicitação vale para a comanda inteira.</p>
 
       {restaurant.serviceFeePercent > 0 && (
         <div className="my-3 space-y-2 text-left">
-          <p className="text-xs font-semibold text-[#5c493a]">
+          <p className="text-xs font-semibold text-[#5c493a] dark:text-stone-300">
             Taxa de serviço sugerida ({restaurant.serviceFeePercent}%):
           </p>
-          <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${includeServiceFee === true ? 'border-[#b9472b] bg-[#fff6f2] font-semibold text-[#3d271d]' : 'border-[#ded5c8] bg-white text-[#5c493a]'}`}>
+          <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${includeServiceFee === true ? 'border-[#b9472b] bg-[#fff6f2] font-semibold text-[#3d271d] dark:bg-[#341d18] dark:text-[#ffb4a2] dark:border-[#b9472b]' : 'border-[#ded5c8] bg-white text-[#5c493a] dark:border-white/10 dark:bg-stone-800 dark:text-stone-300'}`}>
             <input
               type="radio"
               name="panel-service-fee"
@@ -259,7 +259,7 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
             />
             <span>Incluir taxa sugerida (+{restaurant.serviceFeePercent}%)</span>
           </label>
-          <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${includeServiceFee === false ? 'border-[#b9472b] bg-[#fff6f2] font-semibold text-[#3d271d]' : 'border-[#ded5c8] bg-white text-[#5c493a]'}`}>
+          <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${includeServiceFee === false ? 'border-[#b9472b] bg-[#fff6f2] font-semibold text-[#3d271d] dark:bg-[#341d18] dark:text-[#ffb4a2] dark:border-[#b9472b]' : 'border-[#ded5c8] bg-white text-[#5c493a] dark:border-white/10 dark:bg-stone-800 dark:text-stone-300'}`}>
             <input
               type="radio"
               name="panel-service-fee"
@@ -278,7 +278,7 @@ function BillRequestContent({ restaurantSlug, tableTabId, tabLabel, tabStatus }:
           {busy ? 'Solicitando…' : 'Sim, pedir conta'}
         </button>
         <button type="button" disabled={busy} onClick={() => setConfirming(false)}
-          className="min-h-12 rounded-xl border border-black/20 px-4">Cancelar</button>
+          className="min-h-12 rounded-xl border border-black/20 text-stone-800 hover:bg-stone-50 dark:border-white/20 dark:text-stone-200 dark:hover:bg-white/5 px-4 transition-colors">Cancelar</button>
       </div>
     </div> : <button type="button" disabled={disabled} onClick={() => { setConfirming(true); setIncludeServiceFee(null); setActionError(''); }}
       className="mt-2 min-h-12 w-full rounded-xl bg-[var(--brand)] px-4 font-medium text-white disabled:opacity-50">
