@@ -199,7 +199,8 @@ export async function advanceKdsItemStatus(
 export function subscribeToKdsItems(
   restaurantId: string,
   onUpdate: () => void,
-  onStatusChange?: (status: 'SUBSCRIBED' | 'DISCONNECTED' | 'CONNECTING') => void
+  onStatusChange?: (status: 'SUBSCRIBED' | 'DISCONNECTED' | 'CONNECTING') => void,
+  onNewPendingItem?: () => void
 ): () => void {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -220,7 +221,13 @@ export function subscribeToKdsItems(
         table: 'table_tab_items',
         filter: `restaurant_id=eq.${restaurantId}`,
       },
-      triggerDebounced
+      (payload) => {
+        const item = payload.new as { production_status?: string } | undefined;
+        if (item?.production_status === 'pending') {
+          onNewPendingItem?.();
+        }
+        triggerDebounced();
+      }
     )
     .on(
       'postgres_changes',

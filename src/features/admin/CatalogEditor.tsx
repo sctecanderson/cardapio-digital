@@ -5,6 +5,8 @@ import type { AdminCategory, AdminProduct } from "./adminCatalog";
 import { ProductMediaFields } from "./ProductMediaFields";
 import { uploadMenuMedia } from "./menuMedia";
 import type { DraftPhoto, DraftVideo } from "./menuMedia";
+import { fetchInventory } from "../inventory/inventoryService";
+import type { InventoryItem } from "../inventory/inventoryService";
 
 export type CatalogSelection =
   | { kind: "category"; entry: AdminCategory | null }
@@ -62,7 +64,18 @@ export function CatalogEditor({
         ? String(product.prep_time_max_minutes)
         : "",
     preparationStation: (product?.preparation_station as 'kitchen' | 'bar' | 'none') ?? 'kitchen',
+    inventoryItemId: product?.inventory_item_id ?? "",
   });
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+
+  useEffect(() => {
+    if (isProduct && restaurantId) {
+      fetchInventory(restaurantId)
+        .then(setInventoryItems)
+        .catch((err) => console.error("Erro ao carregar estoque para vinculo:", err));
+    }
+  }, [isProduct, restaurantId]);
+
   const [photos, setPhotos] = useState<DraftPhoto[]>(() =>
     [...(product?.images ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
   );
@@ -182,6 +195,7 @@ export function CatalogEditor({
               prep_time_min_minutes: prepMin,
               prep_time_max_minutes: prepMax,
               preparation_station: draft.preparationStation,
+              inventory_item_id: draft.inventoryItemId.trim() ? draft.inventoryItemId.trim() : null,
             }
           : { active: draft.active }),
       };
@@ -426,6 +440,29 @@ export function CatalogEditor({
                 </label>
                 <p className="text-xs opacity-75">
                   Define em qual esteira do KDS o pedido será preparado. Itens sem preparo não entram nas filas de produção da cozinha ou do bar.
+                </p>
+                <label className="block text-sm font-medium">
+                  Vincular ao Estoque (Baixa automática)
+                  <select
+                    value={draft.inventoryItemId}
+                    className={inputClass}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        inventoryItemId: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Nenhum vínculo (Estoque ilimitado)</option>
+                    {inventoryItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} ({item.unit_measure}) — Saldo: {item.current_quantity}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="text-xs opacity-75">
+                  Quando um pedido for feito na mesa, 1 unidade deste insumo/produto terá baixa automática no estoque. Caso o saldo chegue a zero, o produto exibirá status esgotado no cardápio.
                 </p>
                 <label className="block text-sm font-medium">
                   Ingredientes, alergênicos e restrições

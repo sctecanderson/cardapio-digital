@@ -284,10 +284,16 @@ function RestaurantMenuContent({
                       <p className="menu-item-desc">{product.shortDescription || product.description}</p>
                       <div className="menu-item-footer">
                         <strong className="menu-item-price">{currency.format(product.priceInCents / 100)}</strong>
-                        <span className="menu-item-rating" aria-label={`${likesCount} curtidas`}>
-                          <HeartBadgeIcon />
-                          {formatLikes(likesCount)}
-                        </span>
+                        {product.isOutOfStock ? (
+                          <span className="text-xs px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-zinc-500 font-medium">
+                            Esgotado
+                          </span>
+                        ) : (
+                          <span className="menu-item-rating" aria-label={`${likesCount} curtidas`}>
+                            <HeartBadgeIcon />
+                            {formatLikes(likesCount)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </Link>

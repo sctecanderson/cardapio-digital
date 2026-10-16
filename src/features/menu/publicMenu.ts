@@ -133,6 +133,14 @@ export function parsePublicMenu(value: unknown): RestaurantMenu {
       row.prepTimeMaxMinutes == null
         ? undefined
         : integer(row.prepTimeMaxMinutes);
+    const inventoryItemId =
+      row.inventoryItemId != null
+        ? String(row.inventoryItemId)
+        : row.inventory_item_id != null
+          ? String(row.inventory_item_id)
+          : null;
+    const isOutOfStock =
+      row.isOutOfStock === true || row.is_out_of_stock === true;
     return { id: text(row.id), restaurantId, categoryId, slug: text(row.slug),
       name: text(row.name), shortDescription: text(row.shortDescription),
       description: text(row.description), priceInCents,
@@ -140,7 +148,8 @@ export function parsePublicMenu(value: unknown): RestaurantMenu {
       sortOrder: integer(row.sortOrder), coverImageId, images, video,
       dietaryInformation: row.dietaryInformation == null ? undefined : text(row.dietaryInformation),
       prepTimeMinMinutes, prepTimeMaxMinutes,
-      likesCount, commentsCount };
+      likesCount, commentsCount,
+      inventoryItemId, isOutOfStock };
   });
   if (new Set(products.map((product) => product.id)).size !== products.length ||
       new Set(products.map((product) => product.slug)).size !== products.length) {
@@ -670,4 +679,63 @@ export async function getMyProductCommentLikes(restaurantSlug: string): Promise<
   return data
     .filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
     .map((id) => id.trim());
+}
+
+export interface DirectOrderResult {
+  itemId: string;
+  tabId: string;
+  tableId: string;
+  tableNumber: number;
+  productName: string;
+  quantity: number;
+  productionStatus: string;
+  message: string;
+}
+
+export interface TableAssistanceResult {
+  alertId: string;
+  type: string;
+  tableId: string;
+  tableNumber: number;
+  message: string;
+}
+
+export async function createDirectTableOrder(
+  tableId: string,
+  productId: string,
+  quantity: number = 1
+): Promise<DirectOrderResult> {
+  const { data, error } = await supabase.rpc('create_direct_table_order', {
+    p_table_id: tableId,
+    p_product_id: productId,
+    p_quantity: quantity,
+  });
+
+  if (error) {
+    if (error.message.includes('ITEM_OUT_OF_STOCK')) {
+      throw new Error('Este item acabou de esgotar no estoque.');
+    }
+    throw new Error(error.message || 'Não foi possível realizar o pedido. Tente novamente.');
+  }
+
+  return data as DirectOrderResult;
+}
+
+export async function requestTableAssistance(
+  tableId: string,
+  requestType: 'call_waiter' | 'close_table_request'
+): Promise<TableAssistanceResult> {
+  const { data, error } = await supabase.rpc('request_table_assistance', {
+    p_table_id: tableId,
+    p_request_type: requestType,
+  });
+
+  if (error) {
+    if (error.message.includes('ASSISTANCE_COOLDOWN')) {
+      throw new Error('Sua solicitação recente já foi recebida. Um atendente irá até sua mesa em breve.');
+    }
+    throw new Error(error.message || 'Não foi possível chamar atendimento.');
+  }
+
+  return data as TableAssistanceResult;
 }

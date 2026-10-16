@@ -64,6 +64,10 @@ export interface Product {
 
   // Total real de comentários públicos aprovados do produto no catálogo.
   commentsCount?: number;
+
+  // Estoque e disponibilidade operacional (Bloco 17)
+  inventoryItemId?: string | null;
+  isOutOfStock?: boolean;
 }
 
 export interface PublicProductComment {

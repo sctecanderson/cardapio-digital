@@ -98,7 +98,13 @@ function ProductCard({ product, restaurantSlug, tableQuery, likesCount }: {
         <p>{product.shortDescription || product.description || 'Ingredientes selecionados e preparo especial da casa.'}</p>
         <div className="home-dish-footer">
           <strong>{currency.format(product.priceInCents / 100)}</strong>
-          <span className="home-dish-btn">Ver Prato <b aria-hidden="true">+</b></span>
+          {product.isOutOfStock ? (
+            <span className="text-xs px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-zinc-500 font-medium">
+              Esgotado
+            </span>
+          ) : (
+            <span className="home-dish-btn">Ver Prato <b aria-hidden="true">+</b></span>
+          )}
         </div>
       </div>
     </Link>

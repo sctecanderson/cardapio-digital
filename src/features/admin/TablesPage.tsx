@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { useRestaurant } from "../restaurants/RestaurantProvider";
 import { getAdminTables, saveTable, deleteTable, type AdminTable } from "./restaurantAdmin";
 import { AdminIcon } from "./AdminLayout";
+import { supabase } from "../../lib/supabase";
 import {
   getTableServiceRequestsSummary,
   dismissTableServiceRequests,
@@ -37,9 +38,10 @@ export function TablesPage() {
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
 
-  // Exclusão de mesa
+  // Exclusão e Liberação de mesa (Bloco 17)
   const [tableToDelete, setTableToDelete] = useState<AdminTable | null>(null);
   const [deletingTable, setDeletingTable] = useState(false);
+  const [releasingTableId, setReleasingTableId] = useState<string | null>(null);
 
   // QR Codes e Impressão em Lote (Bloco 13)
   const [viewingQrTable, setViewingQrTable] = useState<AdminTable | null>(null);
@@ -239,6 +241,32 @@ export function TablesPage() {
       );
     } finally {
       setDeletingTable(false);
+    }
+  }
+
+  async function handleResetAndReleaseTable(table: AdminTable) {
+    if (releasingTableId) return;
+    const confirmRelease = window.confirm(
+      `Liberar Mesa ${String(table.tableNumber).padStart(2, "0")}?\n\nIsso encerrará comanda e atendimento em aberto, concluindo os pedidos da mesa sem exigir fluxo de caixa ou gateway, deixando-a pronta para o próximo cliente.`
+    );
+    if (!confirmRelease) return;
+
+    setReleasingTableId(table.id);
+    try {
+      const { error } = await supabase.rpc('reset_and_release_table', {
+        p_table_id: table.id,
+      });
+      if (error) throw error;
+      setNotice(`Mesa ${String(table.tableNumber).padStart(2, "0")} liberada e pronta para o próximo cliente.`);
+      setRevision((v) => v + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível liberar a mesa.",
+      );
+    } finally {
+      setReleasingTableId(null);
     }
   }
 
@@ -843,6 +871,21 @@ export function TablesPage() {
                   >
                     Configurar
                   </button>
+                  {!isLocked && t.active && (t.visitId || t.billPending) && (
+                    <button
+                      type="button"
+                      className="admin-button"
+                      style={{
+                        borderColor: "rgba(239, 68, 68, 0.4)",
+                        color: "var(--danger, #dc2626)",
+                      }}
+                      disabled={releasingTableId === t.id}
+                      onClick={() => handleResetAndReleaseTable(t)}
+                      title="Encerra o ciclo e libera a mesa para o próximo cliente sem cobrança no sistema"
+                    >
+                      {releasingTableId === t.id ? "Liberando..." : "Liberar / Limpar"}
+                    </button>
+                  )}
                 </div>
                 {!isLocked && (
                   <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "6px", flexWrap: "wrap" }}>

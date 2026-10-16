@@ -6,6 +6,7 @@ import { shareProduct } from './productShare';
 import { useTableContext, getTableQueryString } from '../tables/useTableContext';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
 import { ServiceActionPopup, type ServiceActionType } from '../service/ServiceActionPopup';
+import { createDirectTableOrder, requestTableAssistance } from './publicMenu';
 
 const currency = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -19,9 +20,7 @@ function formatLikes(count: number) {
   return String(Math.max(0, count));
 }
 
-type ProductAction = 'waiter' | 'bill' | null;
-
-function ProductNavIcon({ name }: { name: 'home' | 'waiter' | 'bill' }) {
+function ProductNavIcon({ name }: { name: 'home' | 'waiter' | 'bill' | 'close' }) {
   if (name === 'home') return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -31,6 +30,13 @@ function ProductNavIcon({ name }: { name: 'home' | 'waiter' | 'bill' }) {
   if (name === 'waiter') return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
+  if (name === 'close') return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9 12h6" />
+      <path d="M12 9v6" />
     </svg>
   );
   return (
@@ -55,8 +61,52 @@ export function ProductPage() {
   const [activeAction, setActiveAction] = useState<ServiceActionType>(null);
   const galleryRail = useRef<HTMLDivElement>(null);
 
+  // Estados do Bloco 17: Disparo Direto para Cozinha/Bar e Assistência
+  const [orderQuantity, setOrderQuantity] = useState(1);
+  const [orderBusy, setOrderBusy] = useState(false);
+  const [orderSuccessMessage, setOrderSuccessMessage] = useState<string | null>(null);
+  const [orderErrorMessage, setOrderErrorMessage] = useState<string | null>(null);
+
+  const [assistanceBusy, setAssistanceBusy] = useState(false);
+  const [assistanceMessage, setAssistanceMessage] = useState<string | null>(null);
+
   const catalog = usePublicMenu();
   const product = catalog.menu?.products.find((item) => item.slug === productSlug);
+
+  const handleDirectOrder = async () => {
+    if (!product || !table.tableId || orderBusy || product.isOutOfStock) return;
+    setOrderBusy(true);
+    setOrderErrorMessage(null);
+    setOrderSuccessMessage(null);
+    try {
+      const result = await createDirectTableOrder(table.tableId, product.id, orderQuantity);
+      setOrderSuccessMessage(result.message || 'Pedido enviado com sucesso para a cozinha/bar!');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Não foi possível enviar o pedido.';
+      setOrderErrorMessage(msg);
+    } finally {
+      setOrderBusy(false);
+    }
+  };
+
+  const handleTableAssistance = async (type: 'call_waiter' | 'close_table_request') => {
+    if (!table.tableId || assistanceBusy) {
+      if (type === 'call_waiter') setActiveAction('waiter');
+      else setActiveAction('bill');
+      return;
+    }
+    setAssistanceBusy(true);
+    setAssistanceMessage(null);
+    try {
+      const res = await requestTableAssistance(table.tableId, type);
+      setAssistanceMessage(res.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Não foi possível solicitar atendimento.';
+      setAssistanceMessage(msg);
+    } finally {
+      setAssistanceBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!catalog.likeError) return;
@@ -309,8 +359,18 @@ export function ProductPage() {
             </div>
           )}
 
-          <div className="product-price">
-            {currency.format(product.priceInCents / 100)}
+          <div className="product-price flex items-center justify-between gap-3">
+            <span>{currency.format(product.priceInCents / 100)}</span>
+            {product.isOutOfStock && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/50">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="w-3.5 h-3.5">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="15" y1="9" x2="9" y2="15" />
+                  <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+                Esgotado
+              </span>
+            )}
           </div>
         </div>
 
@@ -362,27 +422,131 @@ export function ProductPage() {
         </div>
       </article>
 
-      {/* Aviso: Faça seu pedido com o garçom ou aviso de indisponibilidade */}
-      <div className="product-order-notice" role="status" aria-live="polite">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-        </svg>
-        <span>
-          {product.available
-            ? "Faça seu pedido com o garçom."
-            : "Este item está temporariamente indisponível para pedidos."}
-        </span>
-      </div>
+      {/* Bloco 17: Disparo Direto para a Cozinha / Bar para Mesa Ativa */}
+      {table.status === 'unverified' && table.tableId && !product.isOutOfStock && product.available && (
+        <section className="product-direct-order-card mt-6 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900" aria-label="Fazer pedido direto para a mesa">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <span className="text-xs uppercase tracking-wider font-semibold text-orange-600 dark:text-orange-400">
+                Disparo Direto para Cozinha / Bar
+              </span>
+              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                Mesa {table.tableNumber}
+              </h3>
+            </div>
+            <div className="flex items-center border border-zinc-300 dark:border-zinc-700 rounded-xl overflow-hidden bg-zinc-50 dark:bg-zinc-800">
+              <button
+                type="button"
+                className="w-10 h-10 flex items-center justify-center text-lg font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 active:scale-95 disabled:opacity-30"
+                onClick={() => setOrderQuantity((q) => Math.max(1, q - 1))}
+                disabled={orderQuantity <= 1 || orderBusy}
+                aria-label="Diminuir quantidade"
+              >
+                -
+              </button>
+              <span className="w-10 text-center font-bold text-base text-zinc-900 dark:text-zinc-100">
+                {orderQuantity}
+              </span>
+              <button
+                type="button"
+                className="w-10 h-10 flex items-center justify-center text-lg font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 active:scale-95 disabled:opacity-30"
+                onClick={() => setOrderQuantity((q) => Math.min(99, q + 1))}
+                disabled={orderQuantity >= 99 || orderBusy}
+                aria-label="Aumentar quantidade"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {orderSuccessMessage ? (
+            <div className="p-3.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50 text-sm font-medium flex items-center gap-2.5">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 flex-shrink-0">
+                <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>{orderSuccessMessage}</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="w-full min-h-12 py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-semibold text-base shadow-sm transition-transform active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50"
+              onClick={handleDirectOrder}
+              disabled={orderBusy}
+            >
+              {orderBusy ? (
+                <>
+                  <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span>Enviando pedido...</span>
+                </>
+              ) : (
+                <>
+                  <span>Fazer Pedido ({currency.format((product.priceInCents * orderQuantity) / 100)})</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                    <polyline points="9 18 15 12 9 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </>
+              )}
+            </button>
+          )}
+
+          {orderErrorMessage && (
+            <p className="mt-2.5 text-xs font-medium text-red-600 dark:text-red-400">
+              {orderErrorMessage}
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* Aviso: Estoque esgotado ou Faça seu pedido */}
+      {product.isOutOfStock ? (
+        <div className="product-order-notice border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300" role="status" aria-live="polite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>Este produto atingiu o limite de estoque e está esgotado no momento.</span>
+        </div>
+      ) : (
+        <div className="product-order-notice" role="status" aria-live="polite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+          <span>
+            {product.available
+              ? (table.status === 'unverified' ? "Pedido direto enviado ao KDS com baixa de estoque." : "Faça seu pedido com o garçom.")
+              : "Este item está temporariamente indisponível para pedidos."}
+          </span>
+        </div>
+      )}
+
+      {/* Toast / Alerta de Assistência */}
+      {assistanceMessage && (
+        <div className="fixed bottom-24 left-4 right-4 z-50 p-4 rounded-xl bg-zinc-900 text-white shadow-xl text-sm flex items-center justify-between border border-zinc-700">
+          <span>{assistanceMessage}</span>
+          <button type="button" onClick={() => setAssistanceMessage(null)} className="ml-3 font-bold text-zinc-400 hover:text-white text-base">
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Dock / Barra de ações inferior flutuante */}
       <nav className="home-bottom-nav" aria-label="Ações da mesa">
         <Link to={`/${restaurantSlug}${tableQuery}`}>
           <ProductNavIcon name="home" /><span>Início</span>
         </Link>
-        <button type="button" onClick={() => setActiveAction('waiter')}>
+        <button type="button" onClick={() => handleTableAssistance('call_waiter')}>
           <ProductNavIcon name="waiter" /><span>Chamar Garçom</span>
         </button>
+        {table.status === 'unverified' && (
+          <button type="button" onClick={() => handleTableAssistance('close_table_request')}>
+            <ProductNavIcon name="close" /><span>Encerrar</span>
+          </button>
+        )}
         <Link to={`/${restaurantSlug}/comanda${tableQuery}`}>
           <ProductNavIcon name="bill" /><span>Comanda</span>
         </Link>

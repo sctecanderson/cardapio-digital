@@ -9,6 +9,7 @@ export interface AdminProduct {
   sort_order: number; dietary_information: string | null;
   prep_time_min_minutes?: number | null; prep_time_max_minutes?: number | null;
   preparation_station?: 'kitchen' | 'bar' | 'none';
+  inventory_item_id?: string | null;
   revision: number;
   images: AdminImage[]; cover_image_id: string | null; video: AdminVideo | null;
 }
@@ -43,6 +44,7 @@ export function parseAdminCatalog(value: unknown): AdminCatalog {
       || typeof row.short_description !== 'string' || typeof row.description !== 'string'
       || typeof row.available !== 'boolean' || typeof row.featured !== 'boolean'
       || (row.dietary_information !== null && typeof row.dietary_information !== 'string')
+      || (row.inventory_item_id !== undefined && row.inventory_item_id !== null && typeof row.inventory_item_id !== 'string')
       || (row.preparation_station !== undefined && !['kitchen', 'bar', 'none'].includes(row.preparation_station as string))) throw new Error('Produto inválido.');
     if (!Array.isArray(row.images) || (row.cover_image_id !== null && typeof row.cover_image_id !== 'string')) {
       throw new Error('Galeria inválida.');

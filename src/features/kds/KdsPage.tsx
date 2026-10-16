@@ -12,6 +12,38 @@ import {
 } from './kdsService';
 import { KdsItemCard } from './KdsItemCard';
 
+function playNotificationChime() {
+  try {
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    const now = ctx.currentTime;
+    osc.frequency.setValueAtTime(587.33, now); // D5
+    osc.frequency.setValueAtTime(880.00, now + 0.1); // A5
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.2, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.5);
+    setTimeout(() => {
+      ctx.close().catch(() => {});
+    }, 600);
+  } catch (err) {
+    console.warn('Não foi possível reproduzir som de notificação:', err);
+  }
+}
+
 export function KdsPage() {
   const { restaurantSlug: paramSlug } = useParams<{ restaurantSlug: string }>();
   const { restaurant } = useRestaurant();
@@ -24,6 +56,16 @@ export function KdsPage() {
   const [connectionStatus, setConnectionStatus] = useState<'SUBSCRIBED' | 'DISCONNECTED' | 'CONNECTING'>('CONNECTING');
   const [mutatingItemId, setMutatingItemId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  const [audioEnabled, setAudioEnabled] = useState(() => {
+    return localStorage.getItem('kds_audio_enabled') !== 'false';
+  });
+  const audioEnabledRef = useRef(audioEnabled);
+  audioEnabledRef.current = audioEnabled;
+
+  useEffect(() => {
+    localStorage.setItem('kds_audio_enabled', String(audioEnabled));
+  }, [audioEnabled]);
 
   const isMountedRef = useRef(true);
 
@@ -78,6 +120,11 @@ export function KdsPage() {
       (status) => {
         if (isMountedRef.current) {
           setConnectionStatus(status);
+        }
+      },
+      () => {
+        if (audioEnabledRef.current) {
+          playNotificationChime();
         }
       }
     );
@@ -342,6 +389,33 @@ export function KdsPage() {
             </span>
           </div>
 
+          <button
+            type="button"
+            onClick={() => setAudioEnabled((prev) => !prev)}
+            className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl border border-black/10 text-xs font-semibold hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5 transition-colors"
+            title={audioEnabled ? "Silenciar notificações sonoras" : "Ativar aviso sonoro para novos pedidos"}
+            aria-label={audioEnabled ? "Som Ativo" : "Mudo"}
+          >
+            {audioEnabled ? (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="w-4 h-4 text-emerald-600 dark:text-emerald-400">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                </svg>
+                <span className="hidden sm:inline">Som Ativo</span>
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="w-4 h-4 text-stone-400">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </svg>
+                <span className="hidden sm:inline">Mudo</span>
+              </>
+            )}
+          </button>
+
           <ThemeToggleButton className="h-9 w-9 rounded-xl border border-black/10 dark:border-white/10" />
         </div>
       </header>
@@ -352,13 +426,24 @@ export function KdsPage() {
           role="alert"
           className="flex items-center justify-between gap-3 border-b border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200"
         >
-          <span>⚠️ {errorMessage}</span>
+          <div className="flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="w-4 h-4 flex-shrink-0">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>{errorMessage}</span>
+          </div>
           <button
             type="button"
             onClick={() => setErrorMessage(null)}
             className="text-rose-600 hover:text-rose-900 dark:text-rose-400"
+            aria-label="Fechar erro"
           >
-            ✕
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="w-4 h-4">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
       )}
