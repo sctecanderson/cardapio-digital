@@ -77,12 +77,22 @@ export interface CardFormData {
   save_card?: boolean;
 }
 
+export interface PayerInfo {
+  cpfCnpj: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  postalCode?: string;
+  addressNumber?: string;
+}
+
 export interface CreateCheckoutParams {
   restaurantId: string;
   targetPlan: SubscriptionPlanId;
   billingCycle: BillingCycle;
   paymentMethod: PaymentMethodType;
   cardData?: CardFormData | null;
+  payerInfo?: PayerInfo;
   gatewayProvider?: GatewayProvider;
 }
 
@@ -98,6 +108,7 @@ export interface CheckoutResponse {
   subscription_expires_at?: string;
   max_tables?: number;
   pix_qr_code_payload?: string;
+  pix_qr_code_image?: string;
   pix_expires_at?: string;
   already_paid?: boolean;
 }
@@ -120,7 +131,7 @@ export async function fetchBillingSummary(restaurantId: string): Promise<Billing
 
 /**
  * Cria ou processa o checkout de assinatura (PIX, Cartão de Crédito ou Débito).
- * Pronto para adaptação a Edge Functions de gateways externos (Asaas / Mercado Pago / Stripe).
+ * Encaminha para a Edge Function segura do Asaas em produção ou executa RPC direto em sandbox.
  */
 export async function createSubscriptionCheckout(params: CreateCheckoutParams): Promise<CheckoutResponse> {
   const {
@@ -129,16 +140,39 @@ export async function createSubscriptionCheckout(params: CreateCheckoutParams): 
     billingCycle,
     paymentMethod,
     cardData,
-    gatewayProvider = 'elozi_sandbox',
+    payerInfo,
+    gatewayProvider = 'asaas',
   } = params;
 
-  // Em produção, se o gatewayProvider exigir tokenização externa via Edge Function:
-  if (gatewayProvider !== 'elozi_sandbox') {
-    // Adapter modular para Edge Function de gateway externo
-    console.info(`[BillingAdapter] Encaminhando checkout para gateway provider: ${gatewayProvider}`);
+  // 1. Fluxo de Produção Oficial: Asaas Edge Function
+  if (gatewayProvider === 'asaas') {
+    const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('asaas-checkout', {
+      body: {
+        restaurantId,
+        targetPlan,
+        billingCycle,
+        paymentMethod,
+        cardData,
+        payerInfo,
+      },
+    });
+
+    if (edgeErr) {
+      let errorMsg = edgeErr.message || 'Erro na comunicação com o Asaas.';
+      if (edgeData && typeof edgeData === 'object' && 'error' in edgeData) {
+        errorMsg = String((edgeData as { error: string }).error);
+      }
+      throw new Error(errorMsg);
+    }
+
+    if (edgeData && typeof edgeData === 'object' && 'error' in edgeData) {
+      throw new Error(String((edgeData as { error: string }).error));
+    }
+
+    return edgeData as CheckoutResponse;
   }
 
-  // Prepara os dados de cartão estritamente seguros (sem CVV ou PAN completo gravados)
+  // 2. Fluxo Sandbox / Homologação local via RPC
   let safeCardPayload: Record<string, unknown> | null = null;
   if (cardData && (paymentMethod === 'credit_card' || paymentMethod === 'debit_card')) {
     const rawDigits = (cardData.card_number || '').replace(/\D/g, '');

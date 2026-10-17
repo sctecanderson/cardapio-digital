@@ -1,5 +1,6 @@
 import { useEffect, useState, useTransition } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { supabase } from '../../lib/supabase';
 import { useRestaurant } from '../restaurants/RestaurantProvider';
 import {
   fetchBillingSummary,
@@ -15,6 +16,26 @@ import {
   type SubscriptionInvoice,
   type SavedPaymentMethod,
 } from '../billing/billingService';
+
+function formatCpfCnpj(val: string): string {
+  const digits = val.replace(/\D/g, '').slice(0, 14);
+  if (digits.length <= 11) {
+    return digits
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return digits
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2');
+}
+
+function formatCep(val: string): string {
+  const digits = val.replace(/\D/g, '').slice(0, 8);
+  return digits.replace(/(\d{5})(\d{1,3})/, '$1-$2');
+}
 
 export function SubscriptionBillingPage() {
   const { restaurant: r } = useRestaurant();
@@ -39,6 +60,7 @@ export function SubscriptionBillingPage() {
     expiresAt: string;
     amountCents: number;
     planId: SubscriptionPlanId;
+    image?: string;
   } | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
@@ -48,6 +70,13 @@ export function SubscriptionBillingPage() {
     expiresAt: string;
     maxTables: number;
   } | null>(null);
+
+  // Dados do Pagador (Obrigatório Asaas)
+  const [payerCpfCnpj, setPayerCpfCnpj] = useState('');
+  const [payerName, setPayerName] = useState('');
+  const [payerPhone, setPayerPhone] = useState('');
+  const [payerPostalCode, setPayerPostalCode] = useState('');
+  const [payerAddressNumber, setPayerAddressNumber] = useState('');
 
   // Formulário de Cartão
   const [cardNumber, setCardNumber] = useState('');
@@ -82,6 +111,11 @@ export function SubscriptionBillingPage() {
     setCardHolder('');
     setCardExp('');
     setCardCvv('');
+    setPayerCpfCnpj('');
+    setPayerPostalCode('');
+    setPayerAddressNumber('');
+    setPayerPhone('');
+    setPayerName('');
     setSelectedSavedCardId('new');
     setActiveTab('pix');
     setCheckoutModal({
@@ -98,16 +132,66 @@ export function SubscriptionBillingPage() {
     void loadData();
   };
 
+  // Listener Realtime: detecção automática de pagamento do PIX via Webhook Asaas
+  useEffect(() => {
+    if (!pixPending?.invoiceId) return;
+
+    const channel = supabase
+      .channel(`inv-status-${pixPending.invoiceId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'subscription_invoices',
+          filter: `id=eq.${pixPending.invoiceId}`,
+        },
+        (payload) => {
+          const updated = payload.new as { status?: string; plan_id?: SubscriptionPlanId; max_tables?: number };
+          if (updated?.status === 'paid') {
+            setCheckoutSuccess({
+              invoiceId: pixPending.invoiceId,
+              planId: updated.plan_id || pixPending.planId,
+              expiresAt: '',
+              maxTables: updated.max_tables || 10,
+            });
+            setPixPending(null);
+            setFeedback({
+              type: 'success',
+              message: 'Pagamento PIX confirmado com sucesso via Asaas! Seu plano foi ativado.',
+            });
+            void loadData();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [pixPending?.invoiceId]);
+
   const handleProcessPix = async () => {
     if (!checkoutModal) return;
     try {
       setCheckoutBusy(true);
       setFeedback(null);
+
+      const cleanCpfCnpj = payerCpfCnpj.replace(/\D/g, '');
+      if (cleanCpfCnpj.length !== 11 && cleanCpfCnpj.length !== 14) {
+        throw new Error('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido para emitir o PIX no Asaas.');
+      }
+
       const res = await createSubscriptionCheckout({
         restaurantId: r.id,
         targetPlan: checkoutModal.planId,
         billingCycle: checkoutModal.cycle,
         paymentMethod: 'pix',
+        payerInfo: {
+          cpfCnpj: cleanCpfCnpj,
+          name: payerName.trim() || currentRest.name,
+          phone: payerPhone.replace(/\D/g, ''),
+        },
       });
 
       if (res.pix_qr_code_payload) {
@@ -117,6 +201,7 @@ export function SubscriptionBillingPage() {
           expiresAt: res.pix_expires_at || '',
           amountCents: res.amount_cents,
           planId: checkoutModal.planId,
+          image: res.pix_qr_code_image,
         });
       }
     } catch (err: unknown) {
@@ -160,6 +245,11 @@ export function SubscriptionBillingPage() {
     try {
       setCheckoutBusy(true);
       setFeedback(null);
+
+      const cleanCpfCnpj = payerCpfCnpj.replace(/\D/g, '');
+      if (cleanCpfCnpj.length !== 11 && cleanCpfCnpj.length !== 14) {
+        throw new Error('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) do titular do cartão para o Asaas.');
+      }
 
       let cardDataPayload: {
         holder_name?: string;
@@ -221,6 +311,13 @@ export function SubscriptionBillingPage() {
         billingCycle: checkoutModal.cycle,
         paymentMethod: methodType,
         cardData: cardDataPayload,
+        payerInfo: {
+          cpfCnpj: cleanCpfCnpj,
+          name: payerName.trim() || cardHolder.trim(),
+          postalCode: payerPostalCode.replace(/\D/g, ''),
+          addressNumber: payerAddressNumber.trim() || '1',
+          phone: payerPhone.replace(/\D/g, ''),
+        },
       });
 
       if (res.status === 'paid') {
@@ -957,7 +1054,11 @@ export function SubscriptionBillingPage() {
               /* Tela de Pagamento PIX com QR Code */
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', textAlign: 'center' }}>
                 <div style={{ background: '#ffffff', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
-                  <QRCodeSVG value={pixPending.payload} size={200} level="M" />
+                  {pixPending.image ? (
+                    <img src={pixPending.image} alt="QR Code PIX Asaas" style={{ width: '200px', height: '200px', display: 'block' }} />
+                  ) : (
+                    <QRCodeSVG value={pixPending.payload} size={200} level="M" />
+                  )}
                 </div>
 
                 <div>
@@ -1132,11 +1233,33 @@ export function SubscriptionBillingPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div style={{ padding: '16px', background: 'var(--color-bg-subtle, #f8fafc)', borderRadius: '12px', border: '1px solid var(--color-border, #e2e8f0)' }}>
                       <p style={{ margin: '0 0 8px', fontSize: '14px', fontWeight: 700, color: 'var(--color-text-main)' }}>
-                        Liberação Imediata via Banco Central
+                        Liberação Imediata via Asaas & Banco Central
                       </p>
                       <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                        Ao clicar no botão abaixo, geraremos um QR Code exclusivo para sua empresa. A compensação é feita em segundos.
+                        Ao clicar no botão abaixo, geraremos um QR Code exclusivo para sua empresa. A compensação é feita em segundos e a liberação é 100% automática.
                       </p>
+                    </div>
+
+                    {/* CPF/CNPJ do Pagador (Obrigatório Asaas) */}
+                    <div>
+                      <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)', display: 'block', marginBottom: '4px' }}>
+                        CPF ou CNPJ do titular / empresa: *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                        value={payerCpfCnpj}
+                        onChange={(e) => setPayerCpfCnpj(formatCpfCnpj(e.target.value))}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid var(--color-border, #cbd5e1)',
+                          fontSize: '14px',
+                          background: 'var(--color-surface, #ffffff)',
+                          color: 'var(--color-text-main)',
+                        }}
+                      />
                     </div>
 
                     <button
@@ -1193,6 +1316,28 @@ export function SubscriptionBillingPage() {
 
                     {selectedSavedCardId === 'new' && (
                       <>
+                        {/* CPF ou CNPJ do Titular */}
+                        <div>
+                          <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)', display: 'block', marginBottom: '4px' }}>
+                            CPF ou CNPJ do titular do cartão: *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                            value={payerCpfCnpj}
+                            onChange={(e) => setPayerCpfCnpj(formatCpfCnpj(e.target.value))}
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              borderRadius: '8px',
+                              border: '1px solid var(--color-border, #cbd5e1)',
+                              fontSize: '14px',
+                              background: 'var(--color-surface, #ffffff)',
+                              color: 'var(--color-text-main)',
+                            }}
+                          />
+                        </div>
+
                         {/* Número do Cartão */}
                         <div>
                           <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)', display: 'block', marginBottom: '4px' }}>
@@ -1270,6 +1415,50 @@ export function SubscriptionBillingPage() {
                               placeholder="123"
                               value={cardCvv}
                               onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
+                              style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                border: '1px solid var(--color-border, #cbd5e1)',
+                                fontSize: '14px',
+                                background: 'var(--color-surface, #ffffff)',
+                                color: 'var(--color-text-main)',
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Endereço de Cobrança: CEP e Número */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                          <div>
+                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)', display: 'block', marginBottom: '4px' }}>
+                              CEP de cobrança:
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="00000-000"
+                              value={payerPostalCode}
+                              onChange={(e) => setPayerPostalCode(formatCep(e.target.value))}
+                              style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                border: '1px solid var(--color-border, #cbd5e1)',
+                                fontSize: '14px',
+                                background: 'var(--color-surface, #ffffff)',
+                                color: 'var(--color-text-main)',
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)', display: 'block', marginBottom: '4px' }}>
+                              Número do endereço:
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Ex: 100"
+                              value={payerAddressNumber}
+                              onChange={(e) => setPayerAddressNumber(e.target.value)}
                               style={{
                                 width: '100%',
                                 padding: '10px 12px',

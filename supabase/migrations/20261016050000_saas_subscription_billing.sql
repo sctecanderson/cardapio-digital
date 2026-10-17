@@ -50,6 +50,18 @@ create table if not exists public.restaurant_payment_methods (
 create index if not exists idx_restaurant_payment_methods_restaurant_id
   on public.restaurant_payment_methods(restaurant_id);
 
+-- 2.1 Configuração de PIX da Plataforma em platform_settings (Chave PIX / Banco Inter PJ)
+alter table public.platform_settings
+  add column if not exists pix_key text not null default '67594410000189',
+  add column if not exists pix_receiver_name text not null default 'ELOZI TECNOLOGIA',
+  add column if not exists pix_receiver_city text not null default 'SAO PAULO';
+
+update public.platform_settings
+set pix_key = '67594410000189',
+    pix_receiver_name = 'ELOZI TECNOLOGIA',
+    pix_receiver_city = 'SAO PAULO'
+where id = 'default';
+
 -- ============================================================================
 -- 3. RLS EM subscription_invoices E restaurant_payment_methods
 -- ============================================================================
@@ -170,6 +182,36 @@ revoke all on public.restaurant_payment_methods from public, anon;
 grant select, insert, update, delete on public.restaurant_payment_methods to authenticated;
 
 -- ============================================================================
+-- 3.1 FUNÇÃO AUXILIAR: pix_crc16 (Cálculo CRC16-CCITT para PIX EMV)
+-- ============================================================================
+create or replace function public.pix_crc16(p_str text)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  v_crc integer := 65535; -- 0xFFFF
+  v_len integer := length(p_str);
+  v_byte integer;
+  i integer;
+  j integer;
+begin
+  for i in 1..v_len loop
+    v_byte := ascii(substring(p_str from i for 1));
+    v_crc := v_crc # (v_byte << 8);
+    for j in 1..8 loop
+      if (v_crc & 32768) <> 0 then
+        v_crc := ((v_crc << 1) # 4129) & 65535; -- 0x1021
+      else
+        v_crc := (v_crc << 1) & 65535;
+      end if;
+    end loop;
+  end loop;
+  return upper(lpad(to_hex(v_crc), 4, '0'));
+end;
+$$;
+
+-- ============================================================================
 -- 4. RPC public.create_subscription_checkout
 -- ============================================================================
 create or replace function public.create_subscription_checkout(
@@ -248,13 +290,16 @@ begin
     coalesce(pro_price_cents, 14900) as pro_price_cents,
     coalesce(pro_max_tables, 25) as pro_max_tables,
     coalesce(premium_price_cents, 19900) as premium_price_cents,
-    coalesce(premium_max_tables, 100) as premium_max_tables
+    coalesce(premium_max_tables, 100) as premium_max_tables,
+    coalesce(pix_key, '67594410000189') as pix_key,
+    coalesce(pix_receiver_name, 'ELOZI TECNOLOGIA') as pix_receiver_name,
+    coalesce(pix_receiver_city, 'SAO PAULO') as pix_receiver_city
   into v_settings
   from public.platform_settings
   where id = 'default';
 
   if not found then
-    v_settings := row(9900, 10, 14900, 25, 19900, 100);
+    v_settings := row(9900, 10, 14900, 25, 19900, 100, '67594410000189', 'ELOZI TECNOLOGIA', 'SAO PAULO');
   end if;
 
   if p_target_plan = 'basic' then
@@ -281,13 +326,55 @@ begin
 
   v_invoice_id := gen_random_uuid();
 
-  -- 5. Fluxo PIX
+  -- 5. Fluxo PIX Oficial (Compatível Banco Central & Banco Inter PJ)
   if p_payment_method = 'pix' then
     v_pix_expires_at := timezone('utc', now()) + interval '30 minutes';
-    -- Payload EMV PIX Copia e Cola estruturado com ID da fatura e valor
-    v_pix_payload := '00020101021226580014br.gov.bcb.pix0136elozi-checkout-' || replace(v_invoice_id::text, '-', '') ||
-                     '520400005303986540' || lpad((v_amount_cents::numeric / 100.0)::text, 5, '0') ||
-                     '5802BR5915ELOZI SAAS ME6009SAO PAULO62070503***6304' || upper(substring(md5(v_invoice_id::text) from 1 for 4));
+    declare
+      v_amount_str text;
+      v_pix_key_clean text;
+      v_merchant_info text;
+      v_txid text;
+      v_additional_data text;
+      v_rec_name text;
+      v_rec_city text;
+      v_payload_raw text;
+    begin
+      v_amount_str := to_char(v_amount_cents::numeric / 100.0, 'FM999990.00');
+      v_pix_key_clean := regexp_replace(coalesce(v_settings.pix_key, '67594410000189'), '\D', '', 'g');
+
+      -- Subtag 00 (GUI) + Subtag 01 (Chave CNPJ)
+      v_merchant_info := '0014br.gov.bcb.pix' || '01' || lpad(length(v_pix_key_clean)::text, 2, '0') || v_pix_key_clean;
+
+      -- Tag 59 (Nome) e Tag 60 (Cidade)
+      v_rec_name := upper(substring(regexp_replace(coalesce(v_settings.pix_receiver_name, 'ELOZI TECNOLOGIA'), '[^a-zA-Z0-9 ]', '', 'g') from 1 for 25));
+      if length(v_rec_name) = 0 then
+        v_rec_name := 'ELOZI TECNOLOGIA';
+      end if;
+
+      v_rec_city := upper(substring(regexp_replace(coalesce(v_settings.pix_receiver_city, 'SAO PAULO'), '[^a-zA-Z0-9 ]', '', 'g') from 1 for 15));
+      if length(v_rec_city) = 0 then
+        v_rec_city := 'SAO PAULO';
+      end if;
+
+      -- Tag 62 (Campo Adicional com txid para conciliação no extrato do Banco Inter)
+      v_txid := 'ELOZI' || upper(substring(replace(v_invoice_id::text, '-', '') from 1 for 15));
+      v_additional_data := '05' || lpad(length(v_txid)::text, 2, '0') || v_txid;
+
+      -- Concatenação do BR Code EMV sem CRC16
+      v_payload_raw := '000201' ||
+                       '26' || lpad(length(v_merchant_info)::text, 2, '0') || v_merchant_info ||
+                       '52040000' ||
+                       '5303986' ||
+                       '54' || lpad(length(v_amount_str)::text, 2, '0') || v_amount_str ||
+                       '5802BR' ||
+                       '59' || lpad(length(v_rec_name)::text, 2, '0') || v_rec_name ||
+                       '60' || lpad(length(v_rec_city)::text, 2, '0') || v_rec_city ||
+                       '62' || lpad(length(v_additional_data)::text, 2, '0') || v_additional_data ||
+                       '6304';
+
+      -- Cálculo do CRC16 oficial CCITT-FALSE
+      v_pix_payload := v_payload_raw || public.pix_crc16(v_payload_raw);
+    end;
 
     insert into public.subscription_invoices (
       id,

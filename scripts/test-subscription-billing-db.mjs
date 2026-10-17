@@ -215,6 +215,9 @@ assert.equal(pixCheckoutResult.success, true);
 assert.equal(pixCheckoutResult.status, 'pending', 'Fatura PIX inicia como pending');
 assert.equal(pixCheckoutResult.plan_id, 'premium');
 assert.ok(pixCheckoutResult.pix_qr_code_payload.startsWith('000201'), 'Deve conter payload EMV PIX válido');
+assert.ok(pixCheckoutResult.pix_qr_code_payload.includes('67594410000189'), 'Deve conter chave Pix CNPJ da Elozi / Banco Inter');
+assert.ok(pixCheckoutResult.pix_qr_code_payload.includes('6304'), 'Deve conter tag 63 do CRC16');
+console.log('BR Code PIX Gerado para Banco Inter PJ:', pixCheckoutResult.pix_qr_code_payload);
 
 const invoiceId = pixCheckoutResult.invoice_id;
 
