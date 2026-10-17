@@ -33,15 +33,6 @@ export function KdsItemCard({ item, onAdvance, isMutating = false }: KdsItemCard
 
   const nextStatus = nextStatusMap[item.production_status];
 
-  const actionLabelMap: Record<ProductionStatus, { label: string; icon: string }> = {
-    pending: { label: 'Iniciar Preparo', icon: '🔥' },
-    preparing: { label: 'Marcar Pronto', icon: '✅' },
-    ready: { label: 'Entregue na Mesa', icon: '🚀' },
-    delivered: { label: 'Finalizado', icon: '✓' },
-  };
-
-  const actionConfig = actionLabelMap[item.production_status];
-
   const handleAction = async () => {
     if (!nextStatus || isMutating) return;
     await onAdvance(item, nextStatus);
@@ -59,10 +50,10 @@ export function KdsItemCard({ item, onAdvance, isMutating = false }: KdsItemCard
     <article
       className={`relative flex flex-col justify-between rounded-xl border p-4 shadow-sm transition-all duration-200 ${
         urgency === 'urgent'
-          ? 'border-rose-400 bg-rose-50/50 shadow-rose-100 dark:border-rose-800 dark:bg-rose-950/20'
+          ? 'border-rose-400 bg-rose-50/70 shadow-rose-100 dark:border-rose-900/60 dark:bg-rose-950/30'
           : urgency === 'warning'
-          ? 'border-amber-300 bg-amber-50/40 shadow-amber-50 dark:border-amber-800 dark:bg-amber-950/20'
-          : 'border-black/10 bg-white dark:border-white/10 dark:bg-[#1f1a17]'
+          ? 'border-amber-300 bg-amber-50/70 shadow-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30'
+          : 'border-slate-200 bg-white dark:border-zinc-800 dark:bg-[#18181b]'
       }`}
       aria-labelledby={`kds-item-title-${item.id}`}
     >
@@ -71,7 +62,7 @@ export function KdsItemCard({ item, onAdvance, isMutating = false }: KdsItemCard
         <div className="flex items-center justify-between gap-2 border-b border-black/5 pb-3 dark:border-white/5">
           <div className="flex items-center gap-2">
             <span
-              className="inline-flex items-center rounded-lg bg-[var(--ink)] px-2.5 py-1 text-sm font-black tracking-wider text-[var(--bg)] shadow-sm dark:bg-[#ffffff] dark:text-[#14110f]"
+              className="inline-flex items-center rounded-lg bg-slate-900 px-2.5 py-1 text-sm font-black tracking-wider text-white shadow-xs dark:bg-white dark:text-slate-950"
               aria-label={`Mesa do pedido: ${item.table_name}`}
             >
               {item.table_name.toUpperCase()}
@@ -87,15 +78,27 @@ export function KdsItemCard({ item, onAdvance, isMutating = false }: KdsItemCard
           <div
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-xs font-bold ${
               urgency === 'urgent'
-                ? 'animate-pulse bg-rose-600 text-white shadow-sm'
+                ? 'animate-pulse bg-rose-700 text-white shadow-xs'
                 : urgency === 'warning'
-                ? 'bg-amber-500 text-white'
-                : 'bg-emerald-600 text-white'
+                ? 'bg-amber-700 text-white shadow-xs'
+                : 'bg-emerald-700 text-white shadow-xs'
             }`}
             title={`Tempo decorrido: ${elapsedFormatted}`}
             aria-label={`Tempo decorrido: ${elapsedMinutes} minutos`}
           >
-            <span aria-hidden="true" className="text-[10px]">⏱</span>
+            <svg
+              className="h-3 w-3"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
             <span>{elapsedFormatted}</span>
           </div>
         </div>
@@ -140,12 +143,12 @@ export function KdsItemCard({ item, onAdvance, isMutating = false }: KdsItemCard
             type="button"
             disabled={isMutating}
             onClick={() => void handleAction()}
-            className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 px-4 text-sm font-bold shadow-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none ${
+            className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 px-4 text-sm font-bold shadow-xs transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none ${
               item.production_status === 'pending'
-                ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                ? 'bg-amber-600 hover:bg-amber-700 text-white'
                 : item.production_status === 'preparing'
-                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-emerald-700 hover:bg-emerald-800 text-white'
             }`}
             aria-live="polite"
           >
@@ -165,8 +168,27 @@ export function KdsItemCard({ item, onAdvance, isMutating = false }: KdsItemCard
               </>
             ) : (
               <>
-                <span aria-hidden="true" className="text-base">{actionConfig.icon}</span>
-                <span>{actionConfig.label}</span>
+                {item.production_status === 'pending' ? (
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z" />
+                  </svg>
+                ) : item.production_status === 'preparing' ? (
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                )}
+                <span>
+                  {item.production_status === 'pending'
+                    ? 'Iniciar Preparo'
+                    : item.production_status === 'preparing'
+                    ? 'Marcar Pronto'
+                    : 'Entregue na Mesa'}
+                </span>
               </>
             )}
           </button>

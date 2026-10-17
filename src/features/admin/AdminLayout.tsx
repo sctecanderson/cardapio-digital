@@ -28,6 +28,24 @@ export function AdminLayout() {
     ["midias", "Armazenamento", "media"],
     ["equipe", "Equipe e acessos", "user"],
   ] as const;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('elozi_admin_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('elozi_admin_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   async function logout() {
     setBusy(true);
     setError("");
@@ -43,39 +61,63 @@ export function AdminLayout() {
     }
   }
   return (
-    <div className="admin-app print:block print:p-0 print:m-0 print:bg-white print:overflow-visible">
+    <div className={`admin-app ${sidebarCollapsed ? 'sidebar-collapsed' : ''} print:block print:p-0 print:m-0 print:bg-white print:overflow-visible`}>
       <a href="#admin-content" className="skip-link print:hidden">
         Pular para o conteúdo
       </a>
-      <aside className="admin-sidebar print:hidden">
-        <Link to={`/${r.slug}/admin`} className="admin-logo">
-          {r.logo ? (
-            <img src={r.logo.url} alt={r.name} />
-          ) : (
-            <>
-              {r.name}
-              <small>{r.subtitle}</small>
-            </>
-          )}
-        </Link>
+      <aside className={`admin-sidebar ${sidebarCollapsed ? 'collapsed' : ''} print:hidden`}>
+        <div className="admin-sidebar-header">
+          <Link to={`/${r.slug}/admin`} className="admin-logo">
+            {r.logo ? (
+              <img src={r.logo.url} alt={r.name} />
+            ) : (
+              <>
+                {r.name}
+                <small>{r.subtitle}</small>
+              </>
+            )}
+          </Link>
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="admin-sidebar-toggle"
+            aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+            title={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+          >
+            {sidebarCollapsed ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect width="18" height="18" x="3" y="3" rx="2" />
+                <path d="M9 3v18" />
+                <path d="m13 15 3-3-3-3" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect width="18" height="18" x="3" y="3" rx="2" />
+                <path d="M9 3v18" />
+                <path d="m14 9-3 3 3 3" />
+              </svg>
+            )}
+          </button>
+        </div>
         <nav aria-label="Administração">
           {links.map(([path, label, icon]) => (
             <NavLink
               end
               key={path}
               to={`/${r.slug}/admin${path ? `/${path}` : ""}`}
+              title={label}
             >
               <AdminIcon name={icon} />
               <span>{label}</span>
             </NavLink>
           ))}
-          <Link to={`/${r.slug}/equipe`}>
+          <Link to={`/${r.slug}/equipe`} title="Atendimento">
             <AdminIcon name="bell" />
-            Atendimento
+            <span>Atendimento</span>
           </Link>
-          <Link to={`/${r.slug}/acesso`}>
+          <Link to={`/${r.slug}/acesso`} title="Minha conta">
             <AdminIcon name="user" />
-            Minha conta
+            <span>Minha conta</span>
           </Link>
         </nav>
         <button
@@ -83,9 +125,10 @@ export function AdminLayout() {
           className="admin-exit"
           disabled={busy}
           onClick={() => void logout()}
+          title="Sair"
         >
           <AdminIcon name="exit" />
-          {busy ? "Saindo…" : "Sair"}
+          <span>{busy ? "Saindo…" : "Sair"}</span>
         </button>
         {error && <p role="alert">{error}</p>}
       </aside>

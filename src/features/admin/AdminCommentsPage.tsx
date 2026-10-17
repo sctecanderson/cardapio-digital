@@ -412,7 +412,7 @@ export function AdminCommentsPage() {
         style={{
           display: 'flex',
           gap: '8px',
-          borderBottom: '1px solid #e9e0d7',
+          borderBottom: '1px solid var(--color-border, #e9e0d7)',
           paddingBottom: '12px',
           marginTop: '8px',
         }}
@@ -428,8 +428,8 @@ export function AdminCommentsPage() {
             fontSize: '14px',
             border: 'none',
             cursor: 'pointer',
-            background: activeTab === 'comments' ? 'var(--brand, #b45309)' : '#f3ede6',
-            color: activeTab === 'comments' ? '#fff' : '#4a3f35',
+            background: activeTab === 'comments' ? '#dc2626' : 'var(--color-bg-subtle, #f3ede6)',
+            color: activeTab === 'comments' ? '#fff' : 'var(--color-text-main, #4a3f35)',
             transition: 'background 0.2s',
           }}
         >
@@ -447,8 +447,8 @@ export function AdminCommentsPage() {
             fontSize: '14px',
             border: 'none',
             cursor: 'pointer',
-            background: activeTab === 'restricted-terms' ? 'var(--brand, #b45309)' : '#f3ede6',
-            color: activeTab === 'restricted-terms' ? '#fff' : '#4a3f35',
+            background: activeTab === 'restricted-terms' ? '#dc2626' : 'var(--color-bg-subtle, #f3ede6)',
+            color: activeTab === 'restricted-terms' ? '#fff' : 'var(--color-text-main, #4a3f35)',
             transition: 'background 0.2s',
           }}
         >
@@ -469,12 +469,12 @@ export function AdminCommentsPage() {
               justifyContent: 'space-between',
               marginBottom: '20px',
               paddingBottom: '16px',
-              borderBottom: '1px solid #f0e9e1',
+              borderBottom: '1px solid var(--color-border, #f0e9e1)',
             }}
           >
             {/* Filtro de Status */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#6d6158' }}>Status:</span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted, #6d6158)' }}>Status:</span>
               <button
                 type="button"
                 className={`admin-filter-pill ${selectedStatus === 'all' ? 'active' : ''}`}
@@ -514,7 +514,7 @@ export function AdminCommentsPage() {
 
             {/* Filtro de Produto */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '220px' }}>
-              <label htmlFor="admin-filter-product" style={{ fontSize: '13px', fontWeight: 600, color: '#6d6158' }}>
+              <label htmlFor="admin-filter-product" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted, #6d6158)' }}>
                 Prato:
               </label>
               <select
@@ -524,9 +524,10 @@ export function AdminCommentsPage() {
                 style={{
                   padding: '8px 12px',
                   borderRadius: '8px',
-                  border: '1px solid #d4c9bd',
+                  border: '1px solid var(--color-border, #d4c9bd)',
                   fontSize: '13px',
-                  background: '#fff',
+                  background: 'var(--color-surface, #fff)',
+                  color: 'var(--color-text-main, #1c1917)',
                   flex: 1,
                 }}
               >
@@ -542,11 +543,11 @@ export function AdminCommentsPage() {
 
           {/* Listagem */}
           {loadingComments ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#8c7e73' }}>
+            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-text-muted, #8c7e73)' }}>
               Carregando comentários do restaurante…
             </div>
           ) : comments.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '48px 0', color: '#8c7e73' }}>
+            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--color-text-muted, #8c7e73)' }}>
               <p style={{ fontSize: '16px', fontWeight: 600, margin: '0 0 6px' }}>Nenhum comentário encontrado</p>
               <p style={{ fontSize: '14px', margin: 0 }}>
                 {selectedStatus !== 'all' || selectedProduct !== 'all'
@@ -563,10 +564,10 @@ export function AdminCommentsPage() {
                     key={comment.id}
                     className="admin-comment-card"
                     style={{
-                      border: '1px solid #eee7df',
+                      border: '1px solid var(--color-border, #eee7df)',
                       borderRadius: '12px',
                       padding: '16px 20px',
-                      background: '#faf8f5',
+                      background: 'var(--color-bg-subtle, #faf8f5)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '12px',
@@ -583,11 +584,11 @@ export function AdminCommentsPage() {
                       }}
                     >
                       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px' }}>
-                        <strong style={{ fontSize: '15px', color: '#2b1d17' }}>{comment.authorName}</strong>
-                        <span style={{ fontSize: '13px', color: '#81766e' }}>
-                          em <strong style={{ color: '#4a3f35' }}>{comment.productName}</strong>
+                        <strong style={{ fontSize: '15px', color: 'var(--color-text-main, #2b1d17)' }}>{comment.authorName}</strong>
+                        <span style={{ fontSize: '13px', color: 'var(--color-text-muted, #81766e)' }}>
+                          em <strong style={{ color: 'var(--color-text-main, #4a3f35)' }}>{comment.productName}</strong>
                         </span>
-                        <span style={{ fontSize: '12px', color: '#a09489' }}>• {formatDate(comment.createdAt)}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--color-text-muted, #a09489)' }}>• {formatDate(comment.createdAt)}</span>
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -598,7 +599,7 @@ export function AdminCommentsPage() {
                             alignItems: 'center',
                             gap: '4px',
                             fontSize: '13px',
-                            color: '#6d6158',
+                            color: 'var(--color-text-muted, #6d6158)',
                             fontWeight: 500,
                           }}
                           title={`${comment.likesCount} curtida(s)`}
@@ -632,7 +633,7 @@ export function AdminCommentsPage() {
                         margin: 0,
                         fontSize: '14.5px',
                         lineHeight: 1.5,
-                        color: '#382b23',
+                        color: 'var(--color-text-main, #382b23)',
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
                       }}
@@ -649,7 +650,7 @@ export function AdminCommentsPage() {
                         alignItems: 'center',
                         gap: '12px',
                         paddingTop: '8px',
-                        borderTop: '1px solid #f0e9e1',
+                        borderTop: '1px solid var(--color-border, #f0e9e1)',
                       }}
                     >
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -782,8 +783,10 @@ export function AdminCommentsPage() {
                 minWidth: '220px',
                 padding: '10px 14px',
                 borderRadius: '8px',
-                border: '1px solid #d4c9bd',
+                border: '1px solid var(--color-border, #d4c9bd)',
                 fontSize: '14px',
+                background: 'var(--color-surface, #fff)',
+                color: 'var(--color-text-main, #1c1917)',
               }}
             />
             <button
@@ -798,16 +801,16 @@ export function AdminCommentsPage() {
 
           {/* Lista de Termos Cadastrados */}
           {loadingTerms ? (
-            <div style={{ color: '#8c7e73', padding: '20px 0' }}>Carregando palavras restritas…</div>
+            <div style={{ color: 'var(--color-text-muted, #8c7e73)', padding: '20px 0' }}>Carregando palavras restritas…</div>
           ) : terms.length === 0 ? (
             <div
               style={{
                 padding: '30px',
                 borderRadius: '10px',
-                background: '#faf8f5',
-                border: '1px dashed #dcd3c8',
+                background: 'var(--color-bg-subtle, #faf8f5)',
+                border: '1px dashed var(--color-border, #dcd3c8)',
                 textAlign: 'center',
-                color: '#72665d',
+                color: 'var(--color-text-muted, #72665d)',
               }}
             >
               <p style={{ margin: '0 0 6px', fontWeight: 600 }}>Nenhuma palavra restrita cadastrada no restaurante</p>
@@ -817,7 +820,7 @@ export function AdminCommentsPage() {
             </div>
           ) : (
             <div>
-              <p style={{ fontSize: '13px', fontWeight: 600, color: '#6d6158', marginBottom: '12px' }}>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted, #6d6158)', marginBottom: '12px' }}>
                 Termos ativos ({terms.length}):
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
@@ -831,10 +834,10 @@ export function AdminCommentsPage() {
                       gap: '8px',
                       padding: '6px 12px',
                       borderRadius: '8px',
-                      background: '#fff',
-                      border: '1px solid #dfd6cd',
+                      background: 'var(--color-surface, #fff)',
+                      border: '1px solid var(--color-border, #dfd6cd)',
                       fontSize: '13.5px',
-                      color: '#2b1d17',
+                      color: 'var(--color-text-main, #2b1d17)',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                     }}
                   >
@@ -886,7 +889,8 @@ export function AdminCommentsPage() {
           <div
             className="admin-modal-card"
             style={{
-              background: '#fff',
+              background: 'var(--color-surface, #fff)',
+              border: '1px solid var(--color-border, #e2e8f0)',
               borderRadius: '16px',
               maxWidth: '480px',
               width: '100%',
@@ -903,12 +907,12 @@ export function AdminCommentsPage() {
                 <line x1="12" y1="9" x2="12" y2="13" />
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
-              <h3 id="modal-del-title" style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>
+              <h3 id="modal-del-title" style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--color-text-main, #2b1d17)' }}>
                 Excluir comentário definitivamente?
               </h3>
             </div>
 
-            <p style={{ margin: 0, fontSize: '14px', color: '#52453c', lineHeight: 1.5 }}>
+            <p style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-muted, #52453c)', lineHeight: 1.5 }}>
               Esta ação é <strong>irreversível</strong>. O comentário de <strong>{commentToDelete.authorName}</strong> no
               prato <strong>{commentToDelete.productName}</strong> e todas as <strong>{commentToDelete.likesCount}</strong> curtidas
               associadas serão apagados do banco de dados.
@@ -977,7 +981,8 @@ export function AdminCommentsPage() {
           <div
             className="admin-modal-card"
             style={{
-              background: '#fff',
+              background: 'var(--color-surface, #fff)',
+              border: '1px solid var(--color-border, #e2e8f0)',
               borderRadius: '16px',
               maxWidth: '440px',
               width: '100%',
@@ -988,11 +993,11 @@ export function AdminCommentsPage() {
               gap: '16px',
             }}
           >
-            <h3 id="modal-del-term" style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#2b1d17' }}>
+            <h3 id="modal-del-term" style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--color-text-main, #2b1d17)' }}>
               Remover palavra restrita?
             </h3>
 
-            <p style={{ margin: 0, fontSize: '14px', color: '#52453c', lineHeight: 1.5 }}>
+            <p style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-muted, #52453c)', lineHeight: 1.5 }}>
               Deseja remover o termo <strong>&ldquo;{termToDelete.term}&rdquo;</strong> do filtro do restaurante? Novos
               comentários com este termo não serão mais retidos automaticamente por esta regra.
             </p>

@@ -193,12 +193,12 @@ export function KdsPage() {
   // Se o restaurante estiver no plano Básico, renderiza o Paywall comercial
   if (restaurant.subscriptionPlan === 'basic') {
     return (
-      <div className="flex min-h-screen flex-col bg-[#f5f2eb] text-[#2b1d17] antialiased dark:bg-[#14110f] dark:text-[#f7f3ee]">
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-black/10 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-[#1a1512]/95 md:px-6">
+      <div className="flex min-h-screen flex-col bg-[#f8fafc] text-slate-900 antialiased dark:bg-[#09090b] dark:text-[#f4f4f5]">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/95 px-4 py-3 shadow-xs backdrop-blur-md dark:border-white/10 dark:bg-[#18181b]/95 md:px-6">
           <div className="flex items-center gap-4">
             <Link
               to={`/${slug}/admin`}
-              className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)]/60 transition-colors hover:text-[var(--ink)] dark:text-stone-400 dark:hover:text-white"
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 transition-colors hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
               title="Voltar ao Painel Administrativo"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -207,8 +207,8 @@ export function KdsPage() {
               </svg>
               <span>Painel</span>
             </Link>
-            <div className="h-4 w-px bg-black/10 dark:bg-white/10" aria-hidden="true" />
-            <h1 className="text-base font-black tracking-tight text-[var(--ink)] dark:text-white sm:text-lg">
+            <div className="h-4 w-px bg-slate-200 dark:bg-white/10" aria-hidden="true" />
+            <h1 className="text-base font-black tracking-tight text-slate-900 dark:text-white sm:text-lg">
               {restaurant.name}
             </h1>
           </div>
@@ -274,35 +274,35 @@ export function KdsPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f5f2eb] text-[#2b1d17] antialiased dark:bg-[#14110f] dark:text-[#f7f3ee]">
+    <div className="flex min-h-screen flex-col bg-[#f8fafc] text-slate-900 antialiased dark:bg-[#09090b] dark:text-[#f4f4f5]">
       {/* =========================================================================
           BARRA SUPERIOR (TOPBAR DO KDS)
           ========================================================================= */}
-      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 border-b border-black/10 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-[#1a1512]/95 md:px-6">
+      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-xs backdrop-blur-md dark:border-white/10 dark:bg-[#18181b]/95 md:px-6">
         {/* Esquerda: Identificação do Restaurante & Relógio */}
         <div className="flex items-center gap-4">
           <Link
             to={`/${slug}/admin`}
-            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)]/60 transition-colors hover:text-[var(--ink)] dark:text-stone-400 dark:hover:text-white"
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 transition-colors hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
             title="Voltar ao Painel Administrativo"
           >
             <span aria-hidden="true">←</span>
             <span>Painel</span>
           </Link>
 
-          <div className="h-4 w-px bg-black/10 dark:bg-white/10" aria-hidden="true" />
+          <div className="h-4 w-px bg-slate-200 dark:bg-white/10" aria-hidden="true" />
 
           <div className="flex items-baseline gap-2">
-            <h1 className="text-base font-black tracking-tight text-[var(--ink)] dark:text-white sm:text-lg">
+            <h1 className="text-base font-black tracking-tight text-slate-900 dark:text-white sm:text-lg">
               {restaurant.name}
             </h1>
-            <span className="rounded bg-black/5 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-[var(--ink)]/70 dark:bg-white/10 dark:text-stone-300">
+            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-slate-700 dark:bg-white/10 dark:text-zinc-300">
               KDS
             </span>
           </div>
 
           <div
-            className="hidden font-mono text-sm font-black tracking-widest text-[var(--ink)]/80 dark:text-stone-300 sm:inline-block"
+            className="hidden font-mono text-sm font-black tracking-widest text-slate-700 dark:text-zinc-300 sm:inline-block"
             aria-label="Hora atual"
           >
             {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -310,14 +310,14 @@ export function KdsPage() {
         </div>
 
         {/* Centro: Filtro por Estação (Pílulas) */}
-        <nav className="flex items-center rounded-xl bg-stone-100 p-1 dark:bg-[#251f1b]" aria-label="Filtro de estação">
+        <nav className="flex items-center rounded-xl bg-slate-100 p-1 dark:bg-[#27272a]" aria-label="Filtro de estação">
           <button
             type="button"
             onClick={() => setFilterStation('all')}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
               filterStation === 'all'
-                ? 'bg-white text-[var(--ink)] shadow-sm dark:bg-[#342b26] dark:text-white'
-                : 'text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white'
+                ? 'bg-white text-slate-900 shadow-xs dark:bg-[#3f3f46] dark:text-white'
+                : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white'
             }`}
           >
             <span>Todas</span>
@@ -331,8 +331,8 @@ export function KdsPage() {
             onClick={() => setFilterStation('kitchen')}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
               filterStation === 'kitchen'
-                ? 'bg-white text-orange-700 shadow-sm dark:bg-[#342b26] dark:text-orange-300'
-                : 'text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white'
+                ? 'bg-white text-orange-700 shadow-xs dark:bg-[#3f3f46] dark:text-orange-300'
+                : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white'
             }`}
           >
             <span>Cozinha</span>
@@ -346,8 +346,8 @@ export function KdsPage() {
             onClick={() => setFilterStation('bar')}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
               filterStation === 'bar'
-                ? 'bg-white text-blue-700 shadow-sm dark:bg-[#342b26] dark:text-blue-300'
-                : 'text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white'
+                ? 'bg-white text-blue-700 shadow-xs dark:bg-[#3f3f46] dark:text-blue-300'
+                : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white'
             }`}
           >
             <span>Bar</span>
@@ -466,13 +466,13 @@ export function KdsPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {/* Coluna 1: Pendentes / A Fazer */}
             <section
-              className="flex flex-col rounded-2xl border border-black/10 bg-stone-100/70 p-3 shadow-inner dark:border-white/5 dark:bg-[#1a1512]/60 md:p-4"
+              className="flex flex-col rounded-2xl border border-slate-200 bg-slate-100/80 p-3 shadow-inner dark:border-zinc-800/80 dark:bg-[#12100e]/80 md:p-4"
               aria-labelledby="col-pending-heading"
             >
-              <header className="mb-3 flex items-center justify-between border-b border-black/5 pb-2.5 dark:border-white/5">
+              <header className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2.5 dark:border-zinc-800">
                 <div className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-full bg-amber-500" aria-hidden="true" />
-                  <h2 id="col-pending-heading" className="text-sm font-black uppercase tracking-wider">
+                  <h2 id="col-pending-heading" className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-zinc-100">
                     Pendentes / A Fazer
                   </h2>
                 </div>
@@ -483,7 +483,7 @@ export function KdsPage() {
 
               <div className="flex flex-col gap-3">
                 {pendingItems.length === 0 ? (
-                  <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-black/10 text-center text-xs text-stone-400 dark:border-white/10 dark:text-stone-500">
+                  <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-500 dark:border-zinc-800 dark:text-zinc-500">
                     Nenhum pedido pendente
                   </div>
                 ) : (
@@ -501,13 +501,13 @@ export function KdsPage() {
 
             {/* Coluna 2: Em Preparo */}
             <section
-              className="flex flex-col rounded-2xl border border-black/10 bg-stone-100/70 p-3 shadow-inner dark:border-white/5 dark:bg-[#1a1512]/60 md:p-4"
+              className="flex flex-col rounded-2xl border border-slate-200 bg-slate-100/80 p-3 shadow-inner dark:border-zinc-800/80 dark:bg-[#12100e]/80 md:p-4"
               aria-labelledby="col-prep-heading"
             >
-              <header className="mb-3 flex items-center justify-between border-b border-black/5 pb-2.5 dark:border-white/5">
+              <header className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2.5 dark:border-zinc-800">
                 <div className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-full bg-blue-500" aria-hidden="true" />
-                  <h2 id="col-prep-heading" className="text-sm font-black uppercase tracking-wider">
+                  <h2 id="col-prep-heading" className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-zinc-100">
                     Em Preparo
                   </h2>
                 </div>
@@ -518,7 +518,7 @@ export function KdsPage() {
 
               <div className="flex flex-col gap-3">
                 {preparingItems.length === 0 ? (
-                  <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-black/10 text-center text-xs text-stone-400 dark:border-white/10 dark:text-stone-500">
+                  <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-500 dark:border-zinc-800 dark:text-zinc-500">
                     Nenhum item em preparo no momento
                   </div>
                 ) : (
@@ -536,13 +536,13 @@ export function KdsPage() {
 
             {/* Coluna 3: Prontos para Entrega */}
             <section
-              className="flex flex-col rounded-2xl border border-black/10 bg-stone-100/70 p-3 shadow-inner dark:border-white/5 dark:bg-[#1a1512]/60 md:p-4"
+              className="flex flex-col rounded-2xl border border-slate-200 bg-slate-100/80 p-3 shadow-inner dark:border-zinc-800/80 dark:bg-[#12100e]/80 md:p-4"
               aria-labelledby="col-ready-heading"
             >
-              <header className="mb-3 flex items-center justify-between border-b border-black/5 pb-2.5 dark:border-white/5">
+              <header className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2.5 dark:border-zinc-800">
                 <div className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-full bg-emerald-500" aria-hidden="true" />
-                  <h2 id="col-ready-heading" className="text-sm font-black uppercase tracking-wider">
+                  <h2 id="col-ready-heading" className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-zinc-100">
                     Prontos para Entrega
                   </h2>
                 </div>
@@ -553,7 +553,7 @@ export function KdsPage() {
 
               <div className="flex flex-col gap-3">
                 {readyItems.length === 0 ? (
-                  <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-black/10 text-center text-xs text-stone-400 dark:border-white/10 dark:text-stone-500">
+                  <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-500 dark:border-zinc-800 dark:text-zinc-500">
                     Nenhum item aguardando entrega
                   </div>
                 ) : (

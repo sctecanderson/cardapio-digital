@@ -956,7 +956,7 @@ export function ProductCommentsPopover({
                 <li key={comment.id} className="product-comments-item">
                   <div className="product-comments-item-meta">
                     <strong className="product-comments-item-author">
-                      {comment.authorName}
+                      {comment.authorName?.trim() || 'Cliente'}
                     </strong>
                     <time
                       dateTime={comment.createdAt}
