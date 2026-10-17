@@ -102,6 +102,11 @@ const KdsPage = lazy(() =>
     default: m.KdsPage,
   })),
 );
+const SubscriptionBillingPage = lazy(() =>
+  import("../features/admin/SubscriptionBillingPage").then((m) => ({
+    default: m.SubscriptionBillingPage,
+  })),
+);
 const InventoryPage = lazy(() =>
   import("../features/inventory/InventoryPage").then((m) => ({
     default: m.InventoryPage,
@@ -408,6 +413,7 @@ export function App() {
               <Route path="catalogo" element={<AdminCatalogPage />} />
               <Route path="estoque" element={<InventoryPage />} />
               <Route path="comentarios" element={<AdminCommentsPage />} />
+              <Route path="assinatura" element={<SubscriptionBillingPage />} />
               <Route path="identidade" element={<IdentityPage />} />
               <Route path="mesas" element={<TablesPage />} />
               <Route path="midias" element={<MediaMaintenancePage />} />

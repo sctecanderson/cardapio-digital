@@ -24,6 +24,7 @@ export function AdminLayout() {
     ["estoque", "Estoque & Insumos", "package"],
     ["comentarios", "Comentários", "chat"],
     ["mesas", "Mesas e comandas", "table"],
+    ["assinatura", "Assinatura & Planos", "card"],
     ["identidade", "Identidade visual", "settings"],
     ["midias", "Armazenamento", "media"],
     ["equipe", "Equipe e acessos", "user"],
@@ -207,6 +208,7 @@ export function AdminIcon({ name }: { name: string }) {
     bell: "M5 17h14l-2-3V9a5 5 0 0 0-10 0v5ZM10 21h4",
     package: "M16.5 9.4 7.55 4.24M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.27 6.96 12 12.01l8.73-5.05M12 22.08V12",
     exit: "M10 3H4v18h6M9 12h12M17 8l4 4-4 4",
+    card: "M2 5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5Zm0 5h20M6 15h2m4 0h6",
     lock: "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4",
   };
   return (
